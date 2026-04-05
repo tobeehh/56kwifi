@@ -1,0 +1,364 @@
+/* 56k WiFi Zeitmaschine - Retro Terminal Style */
+
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #0a0a0a;
+    color: #00ff41;
+    font-family: 'VT323', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/* CRT Scanline Effect */
+.crt-effect {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    padding: 2rem;
+}
+
+.crt-effect::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15) 0px,
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 2px
+    );
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 1rem;
+}
+
+/* Glitch Title */
+.title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 1.8rem;
+    text-align: center;
+    margin-bottom: 2rem;
+    text-shadow: 0 0 10px #00ff41, 0 0 20px #00ff41, 0 0 40px #00ff41;
+    animation: flicker 3s infinite;
+}
+
+@keyframes flicker {
+    0%, 97%, 100% { opacity: 1; }
+    98% { opacity: 0.8; }
+    99% { opacity: 0.9; }
+}
+
+.glitch {
+    position: relative;
+}
+
+.glitch::before,
+.glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.glitch::before {
+    color: #ff0040;
+    animation: glitch-1 2s infinite linear alternate-reverse;
+    clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+}
+
+.glitch::after {
+    color: #00e5ff;
+    animation: glitch-2 3s infinite linear alternate-reverse;
+    clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+}
+
+@keyframes glitch-1 {
+    0%, 95% { transform: translate(0); }
+    96% { transform: translate(-2px, 1px); }
+    97% { transform: translate(2px, -1px); }
+    98% { transform: translate(-1px, 2px); }
+    100% { transform: translate(0); }
+}
+
+@keyframes glitch-2 {
+    0%, 95% { transform: translate(0); }
+    96% { transform: translate(2px, -1px); }
+    97% { transform: translate(-2px, 1px); }
+    98% { transform: translate(1px, -2px); }
+    100% { transform: translate(0); }
+}
+
+/* Machine Frame */
+.machine-frame {
+    border: 2px solid #00ff41;
+    border-radius: 8px;
+    padding: 1.5rem;
+    background: rgba(0, 255, 65, 0.03);
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.2), inset 0 0 15px rgba(0, 255, 65, 0.05);
+}
+
+/* Display Panel */
+.display-panel {
+    background: #0d0d0d;
+    border: 1px solid #00ff41;
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.year-display .label {
+    display: block;
+    font-size: 1rem;
+    color: #00994d;
+    margin-bottom: 0.5rem;
+    letter-spacing: 4px;
+}
+
+.year-display .value {
+    display: block;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 3rem;
+    color: #00ff41;
+    text-shadow: 0 0 20px #00ff41;
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { text-shadow: 0 0 10px #00ff41; }
+    50% { text-shadow: 0 0 30px #00ff41, 0 0 50px #00ff41; }
+}
+
+.status-display {
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.active {
+    background: #00ff41;
+    box-shadow: 0 0 10px #00ff41;
+    animation: blink 1s infinite;
+}
+
+.status-dot.inactive {
+    background: #444;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.status-text {
+    font-size: 1.2rem;
+    letter-spacing: 2px;
+}
+
+/* Controls */
+.controls {
+    margin-bottom: 1rem;
+}
+
+.year-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.btn-arrow {
+    background: transparent;
+    border: 1px solid #00ff41;
+    color: #00ff41;
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-family: 'VT323', monospace;
+    transition: all 0.2s;
+}
+
+.btn-arrow:hover {
+    background: #00ff41;
+    color: #0a0a0a;
+}
+
+.year-input {
+    background: #0d0d0d;
+    border: 1px solid #00ff41;
+    color: #00ff41;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 1.2rem;
+    width: 120px;
+    text-align: center;
+    padding: 0.5rem;
+    -moz-appearance: textfield;
+}
+
+.year-input::-webkit-outer-spin-button,
+.year-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.year-input:focus {
+    outline: none;
+    box-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+}
+
+/* Epoch Quick Buttons */
+.epoch-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.btn-epoch {
+    background: transparent;
+    border: 1px solid #006622;
+    color: #00994d;
+    font-family: 'VT323', monospace;
+    font-size: 1rem;
+    padding: 0.3rem 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-epoch:hover {
+    border-color: #00ff41;
+    color: #00ff41;
+    background: rgba(0, 255, 65, 0.1);
+}
+
+/* Travel Button */
+.btn-travel {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: 2px solid #00ff41;
+    color: #00ff41;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 0.9rem;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.btn-travel:hover {
+    background: #00ff41;
+    color: #0a0a0a;
+    box-shadow: 0 0 30px rgba(0, 255, 65, 0.5);
+}
+
+/* Disconnect Button */
+.disconnect-form {
+    margin-top: 0.5rem;
+}
+
+.btn-disconnect {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: 1px solid #ff0040;
+    color: #ff0040;
+    font-family: 'VT323', monospace;
+    font-size: 1.2rem;
+    padding: 0.7rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-disconnect:hover {
+    background: #ff0040;
+    color: #0a0a0a;
+}
+
+/* Info Panel */
+.info-panel {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #003311;
+    text-align: center;
+    font-size: 1.1rem;
+    color: #00994d;
+    line-height: 1.6;
+}
+
+.info-panel strong {
+    color: #00ff41;
+}
+
+.info-panel a {
+    color: #00e5ff;
+    text-decoration: none;
+}
+
+.info-panel a:hover {
+    text-decoration: underline;
+}
+
+.hint {
+    font-size: 0.9rem;
+    color: #006622;
+    margin-top: 0.5rem;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .title {
+        font-size: 1.2rem;
+    }
+
+    .year-display .value {
+        font-size: 2rem;
+    }
+
+    .btn-travel {
+        font-size: 0.7rem;
+    }
+
+    .crt-effect {
+        padding: 1rem;
+    }
+
+    .machine-frame {
+        padding: 1rem;
+    }
+}

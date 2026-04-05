@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeitmaschine</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="crt-effect">
+            <h1 class="title glitch" data-text="ZEITMASCHINE">ZEITMASCHINE</h1>
+            <div class="machine-frame">
+                <div class="display-panel">
+                    <div class="year-display">
+                        <span class="label">ZIEL-JAHR</span>
+                        <span id="year-value" class="value">{{ year }}</span>
+                    </div>
+                    <div class="status-display">
+                        <span class="status-dot {% if active %}active{% else %}inactive{% endif %}"></span>
+                        <span class="status-text">
+                            {% if active %}ZEITREISE AKTIV{% else %}BEREIT{% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                <form method="POST" action="/set" class="controls">
+                    <div class="year-selector">
+                        <button type="button" class="btn-arrow" onclick="changeYear(-10)">&laquo;</button>
+                        <button type="button" class="btn-arrow" onclick="changeYear(-1)">&lsaquo;</button>
+                        <input type="number" name="year" id="year-input"
+                               value="{{ year }}" min="1996" max="2025"
+                               class="year-input">
+                        <button type="button" class="btn-arrow" onclick="changeYear(1)">&rsaquo;</button>
+                        <button type="button" class="btn-arrow" onclick="changeYear(10)">&raquo;</button>
+                    </div>
+
+                    <div class="epoch-buttons">
+                        <button type="button" class="btn-epoch" onclick="setYear(1996)">1996</button>
+                        <button type="button" class="btn-epoch" onclick="setYear(1999)">1999</button>
+                        <button type="button" class="btn-epoch" onclick="setYear(2000)">2000</button>
+                        <button type="button" class="btn-epoch" onclick="setYear(2005)">2005</button>
+                        <button type="button" class="btn-epoch" onclick="setYear(2010)">2010</button>
+                        <button type="button" class="btn-epoch" onclick="setYear(2015)">2015</button>
+                    </div>
+
+                    <button type="submit" class="btn-travel">
+                        <span class="btn-text">&#9889; ZEITREISE STARTEN</span>
+                    </button>
+                </form>
+
+                {% if active %}
+                <form method="POST" action="/disconnect" class="disconnect-form">
+                    <button type="submit" class="btn-disconnect">
+                        &#9744; ZURUECK ZUR GEGENWART
+                    </button>
+                </form>
+                {% endif %}
+
+                <div class="info-panel">
+                    <p>Verbinde dich mit dem WLAN <strong>"Zeitmaschine"</strong>
+                       und surfe im Internet von <strong id="info-year">{{ year }}</strong>.</p>
+                    <p class="hint">Alle Webseiten werden ueber das
+                       <a href="https://web.archive.org" target="_blank">Internet Archive</a> geladen.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const yearInput = document.getElementById('year-input');
+        const yearValue = document.getElementById('year-value');
+        const infoYear = document.getElementById('info-year');
+
+        function changeYear(delta) {
+            let year = parseInt(yearInput.value) + delta;
+            year = Math.max(1996, Math.min(2025, year));
+            yearInput.value = year;
+            yearValue.textContent = year;
+            infoYear.textContent = year;
+        }
+
+        function setYear(year) {
+            yearInput.value = year;
+            yearValue.textContent = year;
+            infoYear.textContent = year;
+        }
+
+        yearInput.addEventListener('input', function() {
+            yearValue.textContent = this.value;
+            infoYear.textContent = this.value;
+        });
+    </script>
+</body>
+</html>

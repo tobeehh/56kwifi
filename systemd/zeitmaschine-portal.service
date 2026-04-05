@@ -1,0 +1,16 @@
+[Unit]
+Description=Zeitmaschine Captive Portal
+After=network.target dnsmasq.service hostapd.service
+Wants=dnsmasq.service hostapd.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/zeitmaschine/portal
+ExecStart=/usr/bin/python3 /opt/zeitmaschine/portal/app.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

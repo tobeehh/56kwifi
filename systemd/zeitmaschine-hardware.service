@@ -1,0 +1,15 @@
+[Unit]
+Description=Zeitmaschine Hardware Controller (Display + Encoder)
+After=network.target zeitmaschine-portal.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/zeitmaschine/hardware
+ExecStart=/usr/bin/python3 /opt/zeitmaschine/hardware/controller.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
