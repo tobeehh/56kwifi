@@ -106,9 +106,11 @@ def read_state():
         active_clients = []
         for mac, info in clients.items():
             if info.get("active", False):
+                speed = info.get("speed", "full")
                 active_clients.append({
                     "year": info.get("year", DEFAULT_YEAR),
-                    "id": mac[-5:],  # Letzte 5 Zeichen der MAC
+                    "id": mac[-5:],
+                    "speed": speed,
                 })
         active_count = len(active_clients)
 
@@ -272,11 +274,15 @@ def update_display():
 
             # Zeile 4: Aktive Surfer oder "Waiting..."
             if active_count > 0:
-                # Zeige aktive Surfer: "A3:F2>01 B4:C1>99"
+                # Zeige aktive Surfer: "F2>01@56k C1>99"
                 parts = []
                 for c in active_clients[:2]:
                     yr_short = str(c["year"])[2:]
-                    parts.append(f"{c['id']}>{yr_short}")
+                    spd = c.get("speed", "full")
+                    if spd == "full":
+                        parts.append(f"{c['id'][-2:]}>{yr_short}")
+                    else:
+                        parts.append(f"{c['id'][-2:]}>{yr_short}@{spd}")
                 line4 = " ".join(parts)
             else:
                 line4 = "  Waiting for surfers"

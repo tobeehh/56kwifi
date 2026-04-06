@@ -31,7 +31,7 @@
             <div class="tagline">[ SURF THE TIMELINE ]</div>
             <div class="header-bar">
                 <span class="header-item">SIGNAL: <span class="blink-dot">*</span> ONLINE</span>
-                <span class="header-item">BAUD: 56000</span>
+                <span class="header-item">BAUD: <span id="header-baud">{{ speed_presets[speed].kbit if speed_presets[speed].kbit > 0 else 'MAX' }}</span></span>
                 <span class="header-item">EPOCH: <span id="header-epoch">{{ epoch_label }}</span></span>
                 <span class="header-item"><a href="/stats" class="header-link">SYS::STATS</a></span>
             </div>
@@ -124,6 +124,37 @@
                         <button type="button" onclick="setYear(2020)" class="qy">20</button>
                     </div>
 
+                    <!-- Speed Selector -->
+                    <div class="speed-section">
+                        <div class="section-header" style="margin-bottom:0.6rem">
+                            <span class="section-line"></span>
+                            <span class="section-title">LINE SPEED</span>
+                            <span class="section-line"></span>
+                        </div>
+                        <div class="speed-selector">
+                            {% for key, preset in speed_presets.items() %}
+                            <label class="speed-option {% if speed == key %}selected{% endif %}"
+                                   data-speed="{{ key }}" data-kbit="{{ preset.kbit }}">
+                                <input type="radio" name="speed" value="{{ key }}"
+                                       {% if speed == key %}checked{% endif %}
+                                       onchange="updateSpeed(this.value)">
+                                <span class="speed-name">{{ preset.label }}</span>
+                                <span class="speed-desc">{{ preset.desc }}</span>
+                                {% if preset.kbit > 0 %}
+                                <span class="speed-kbit">{{ preset.kbit }} kbit/s</span>
+                                {% else %}
+                                <span class="speed-kbit">MAX</span>
+                                {% endif %}
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <div class="speed-auto">
+                            <button type="button" class="btn-auto-speed" onclick="autoSpeed()">
+                                AUTO &mdash; match epoch
+                            </button>
+                        </div>
+                    </div>
+
                     <button type="submit" class="btn-connect" id="btn-connect">
                         <span class="btn-connect-icon">&gt;</span>
                         <span class="btn-connect-text">DIAL IN &mdash; CONNECT TO <span id="btn-year">{{ year }}</span></span>
@@ -131,6 +162,18 @@
                 </form>
 
                 {% if active %}
+                <form method="POST" action="/set_speed" class="speed-change-form">
+                    <div class="speed-change-row">
+                        <select name="speed" class="speed-select" onchange="this.form.submit()">
+                            {% for key, preset in speed_presets.items() %}
+                            <option value="{{ key }}" {% if speed == key %}selected{% endif %}>
+                                {{ preset.label }}{% if preset.kbit > 0 %} ({{ preset.kbit }} kbit/s){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <span class="speed-change-label">CHANGE BAUD</span>
+                    </div>
+                </form>
                 <form method="POST" action="/disconnect">
                     <button type="submit" class="btn-hangup">
                         <span class="btn-hangup-icon">x</span>
@@ -194,6 +237,7 @@
     </div>
 
     <script id="favorites-data" type="application/json">{{ favorites_data | tojson }}</script>
+    <script id="epoch-speeds-data" type="application/json">{{ epoch_speeds | tojson }}</script>
 
     <script>
         // === Elements ===
@@ -212,6 +256,8 @@
         const body = document.body;
 
         const favoritesData = JSON.parse($('favorites-data').textContent);
+        const epochSpeeds = JSON.parse($('epoch-speeds-data').textContent);
+        const headerBaud = $('header-baud');
 
         const epochs = {
             '90er':   { min: 1996, max: 1999, label: 'THE 90s' },
@@ -276,6 +322,25 @@
 
         function setYear(y) { updateAll(y); }
 
+        function updateSpeed(speedKey) {
+            document.querySelectorAll('.speed-option').forEach(el => {
+                el.classList.toggle('selected', el.dataset.speed === speedKey);
+            });
+            const kbit = document.querySelector(`.speed-option[data-speed="${speedKey}"]`)?.dataset.kbit;
+            headerBaud.textContent = kbit === '0' ? 'MAX' : kbit;
+        }
+
+        function autoSpeed() {
+            const year = parseInt(yearInput.value);
+            const ep = getEpoch(year);
+            const speed = epochSpeeds[ep] || 'full';
+            const radio = document.querySelector(`input[name="speed"][value="${speed}"]`);
+            if (radio) {
+                radio.checked = true;
+                updateSpeed(speed);
+            }
+        }
+
         timelineSlider.addEventListener('input', function() {
             updateAll(parseInt(this.value));
         });
@@ -334,7 +399,7 @@
                 '  RAM: 1024MB ... OK',
                 '  ETH0: Link detected @ 100Mbps ... OK',
                 '  WLAN0: Access Point mode ... OK',
-                '  I2C: SSD1306 OLED @ 0x3C ... OK',
+                '  I2C: LCD 20x4 @ 0x27 ... OK',
                 '  GPIO: Rotary Encoder ... OK',
                 '  GPIO: Passive Buzzer ... OK',
                 '',
