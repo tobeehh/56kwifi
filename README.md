@@ -12,6 +12,9 @@
 **Surf the Timeline.** A Raspberry Pi 3 powered time machine that lets you
 browse the internet of any year from 1996 to 2025 through the Wayback Machine.
 
+**Recommended base image: [DietPi](https://dietpi.com/)** (minimal Debian,
+~130MB RAM idle). Also works on Raspberry Pi OS.
+
 ## How It Works
 
 1. Connect to WiFi **"CHRONOSURF"**
@@ -54,10 +57,35 @@ eras simultaneously.
 
 ## Install
 
+### DietPi (recommended)
+
+1. Flash [DietPi](https://dietpi.com/) for Raspberry Pi 3
+2. Boot, connect via Ethernet, complete initial setup
+3. Enable WiFi and I2C:
+   ```bash
+   dietpi-config
+   # -> Advanced Options -> WiFi -> On
+   # -> Advanced Options -> I2C -> On
+   ```
+4. Install CHRONOSURF:
+   ```bash
+   git clone https://github.com/tobeehh/56kwifi.git
+   cd 56kwifi
+   sudo bash install.sh
+   sudo reboot
+   ```
+
+### Raspberry Pi OS
+
 ```bash
+git clone https://github.com/tobeehh/56kwifi.git
+cd 56kwifi
 sudo bash install.sh
 sudo reboot
 ```
+
+The installer auto-detects DietPi vs Pi OS and adjusts network config
+(ifupdown vs dhcpcd), package sources, and pip installation accordingly.
 
 ## Access
 
