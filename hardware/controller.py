@@ -143,13 +143,14 @@ def button_callback(channel):
 
     is_active = not is_active
     set_state(current_year, is_active)
-    update_display()
     print(f"{'CONNECTED' if is_active else 'DISCONNECTED'}: Year {current_year}")
 
     if is_active:
         play_async(play_dialup_sound)
+        show_connecting_animation()
     else:
         play_async(play_disconnect_sound)
+    update_display()
 
 
 def setup_display():
@@ -253,45 +254,153 @@ def update_display():
             print(f"LCD error: {e}")
 
 
+def _lcd_write_line(row, text):
+    """Schreibt eine Zeile auf das LCD (padded auf 20 Zeichen)."""
+    lcd.cursor_pos = (row, 0)
+    lcd.write_string(text[:LCD_COLS].ljust(LCD_COLS))
+
+
+def _lcd_scroll_up(new_line):
+    """Scrollt alle Zeilen eins hoch und schreibt neue Zeile unten."""
+    # LCD hat kein Hardware-Scroll, also manuell:
+    # Wir nutzen einen Puffer
+    _lcd_scroll_up._buf = getattr(_lcd_scroll_up, '_buf', [''] * LCD_ROWS)
+    _lcd_scroll_up._buf.pop(0)
+    _lcd_scroll_up._buf.append(new_line)
+    for i, line in enumerate(_lcd_scroll_up._buf):
+        _lcd_write_line(i, line)
+
+
+def _boot_type(text, delay=0.04):
+    """Tippt Text zeichenweise in die unterste Zeile."""
+    _lcd_scroll_up._buf = getattr(_lcd_scroll_up, '_buf', [''] * LCD_ROWS)
+    _lcd_scroll_up._buf.pop(0)
+    _lcd_scroll_up._buf.append('')
+
+    # Obere Zeilen neu zeichnen
+    for i in range(LCD_ROWS - 1):
+        _lcd_write_line(i, _lcd_scroll_up._buf[i])
+
+    # Letzte Zeile zeichenweise tippen
+    current = ''
+    for ch in text[:LCD_COLS]:
+        current += ch
+        lcd.cursor_pos = (LCD_ROWS - 1, 0)
+        lcd.write_string(current)
+        time.sleep(delay)
+
+    _lcd_scroll_up._buf[LCD_ROWS - 1] = text
+
+
 def show_boot_screen():
-    """Zeigt den Boot-Screen auf dem LCD."""
+    """Terminal-style Boot-Sequenz wie im Web-UI."""
     if not HW_AVAILABLE:
-        print("[LCD] CHRONOSURF BOOT")
+        boot_lines = [
+            "CHRONOSURF BIOS 1.0",
+            "(c) Temporal Net Inc",
+            "",
+            "Detecting HW...",
+            " CPU: BCM2837  [OK]",
+            " RAM: 1024MB   [OK]",
+            " ETH: 100Mbps  [OK]",
+            " WLAN: AP mode [OK]",
+            " I2C: LCD 20x4 [OK]",
+            " GPIO: Encoder [OK]",
+            " GPIO: Buzzer  [OK]",
+            "",
+            "Init temporal sys...",
+            " Wayback: CONNECTED",
+            " Nodes: 735B pages",
+            " Range: 1996 - 2025",
+            "",
+            "> READY.",
+            "> SURF THE TIMELINE.",
+        ]
+        for line in boot_lines:
+            print(f"[BOOT] {line}")
+            time.sleep(0.06)
         return
 
+    # LCD Puffer initialisieren
+    _lcd_scroll_up._buf = [''] * LCD_ROWS
     lcd.clear()
-    lcd.cursor_pos = (0, 0)
-    lcd.write_string("   CHRONOSURF v1.0  ")
-    lcd.cursor_pos = (1, 0)
-    lcd.write_string(" Surf the Timeline  ")
-    lcd.cursor_pos = (2, 0)
-    lcd.write_string("                    ")
-    lcd.cursor_pos = (3, 0)
-    lcd.write_string("  Initializing...   ")
+
+    # Boot-Sequenz - jede Zeile scrollt hoch wie ein Terminal
+    boot_sequence = [
+        # (text, mode, delay_after)
+        # mode: 'type' = zeichenweise tippen, 'line' = sofort einblenden
+        ("CHRONOSURF BIOS 1.0", "type", 0.3),
+        ("(c)Temporal Net Inc.", "line", 0.4),
+        ("", "line", 0.2),
+        ("Detecting HW...", "type", 0.3),
+        (" CPU: BCM2837  [OK]", "line", 0.15),
+        (" RAM: 1024MB   [OK]", "line", 0.1),
+        (" ETH: 100Mbps  [OK]", "line", 0.15),
+        (" WLAN: AP mode [OK]", "line", 0.15),
+        (" I2C: LCD@0x27 [OK]", "line", 0.1),
+        (" GPIO: Encoder [OK]", "line", 0.1),
+        (" GPIO: Buzzer  [OK]", "line", 0.15),
+        ("", "line", 0.2),
+        ("Init temporal sys..", "type", 0.3),
+        (" Wayback: CONNECTED", "line", 0.2),
+        (" 735 billion pages", "line", 0.15),
+        (" Range: 1996 - 2025", "line", 0.2),
+        ("", "line", 0.15),
+        ("> READY.", "type", 0.3),
+        (">SURF THE TIMELINE.", "type", 0.5),
+    ]
+
+    for text, mode, delay_after in boot_sequence:
+        if mode == "type":
+            _boot_type(text, delay=0.03)
+        else:
+            _lcd_scroll_up(text)
+        time.sleep(delay_after)
 
 
 def show_connecting_animation():
-    """Zeigt eine Verbindungsanimation."""
+    """Terminal-style Verbindungsanimation passend zum Web-UI Warp."""
     if not HW_AVAILABLE or lcd is None:
         return
 
     with display_lock:
         lcd.clear()
-        lcd.cursor_pos = (0, 0)
-        lcd.write_string("   CHRONOSURF       ")
-        lcd.cursor_pos = (1, 0)
-        lcd.write_string(f"  Dialing {current_year}...   ")
-        lcd.cursor_pos = (2, 0)
 
-        # Animated progress bar
-        for i in range(LCD_COLS):
-            lcd.cursor_pos = (2, i)
-            lcd.write_string("\x00")
-            time.sleep(0.08)
+        # Phase 1: Dial sequence
+        _lcd_write_line(0, f"DIAL IN >>> {current_year}")
+        _lcd_write_line(1, "")
+        _lcd_write_line(2, "")
+        _lcd_write_line(3, "")
+        time.sleep(0.3)
 
-        lcd.cursor_pos = (3, 0)
-        lcd.write_string("    CONNECTED!      ")
-        time.sleep(0.5)
+        # Phase 2: Status messages (wie im Web-UI Warp-Overlay)
+        status_msgs = [
+            "Resolving coords...",
+            "Connecting to node..",
+            "Baud rate: 56000",
+            "Loading epoch data..",
+            "Rebuilding DOM...",
+        ]
+
+        for i, msg in enumerate(status_msgs):
+            _lcd_write_line(1, msg)
+
+            # Progress bar auf Zeile 2
+            filled = int((i + 1) / len(status_msgs) * LCD_COLS)
+            bar = "\x00" * filled + " " * (LCD_COLS - filled)
+            _lcd_write_line(2, bar)
+
+            pct = int((i + 1) / len(status_msgs) * 100)
+            _lcd_write_line(3, f"          [{pct:>3d}%]")
+            time.sleep(0.35)
+
+        # Phase 3: Connected!
+        _lcd_write_line(0, f"  >>> {current_year} <<<")
+        _lcd_write_line(1, "")
+        bar_full = "\x00" * LCD_COLS
+        _lcd_write_line(2, bar_full)
+        _lcd_write_line(3, "  LINK ESTABLISHED  ")
+        time.sleep(0.8)
 
 
 def poll_state_changes():
