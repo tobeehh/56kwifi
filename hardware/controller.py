@@ -2,8 +2,23 @@
 """
 CHRONOSURF - Hardware Controller
 
-Steuert den Rotary Encoder, I2C LCD 20x4 und Button
-zur lokalen Jahresauswahl am Geraet.
+Steuert den Rotary Encoder, I2C LCD 20x4 und Button.
+Synchronisiert sich mit dem Web-Portal ueber die gemeinsame State-Datei.
+
+Das State-File hat folgendes Format (geschrieben vom Portal):
+{
+  "clients": {
+    "AA:BB:CC:DD:EE:FF": {"year": 1999, "active": true, "ip": "..."},
+    ...
+  },
+  "global_year": 1999
+}
+
+Der Hardware-Controller:
+- Zeigt auf dem LCD: gewaehltes Jahr, Anzahl aktiver Surfer, letztes Event
+- Rotary Encoder aendert das global_year (Vorauswahl fuer neue Clients)
+- Button-Druck hat keine connect/disconnect Funktion mehr (das machen
+  die Clients selbst), sondern bestaetigt das Jahr als Default
 
 Hardware:
   - Rotary Encoder KY-040: CLK=GPIO17, DT=GPIO18, Button=GPIO27
@@ -41,27 +56,28 @@ MAX_YEAR = 2025
 DEFAULT_YEAR = 1999
 
 # GPIO Pins (BCM)
-PIN_CLK = 17    # Rotary Encoder CLK
-PIN_DT = 18     # Rotary Encoder DT
-PIN_BTN = 27    # Rotary Encoder Button
+PIN_CLK = 17
+PIN_DT = 18
+PIN_BTN = 27
 
-# LCD: I2C address (0x27 fuer PCF8574, 0x3F fuer PCF8574A)
+# LCD
 LCD_I2C_ADDR = 0x27
 LCD_I2C_PORT = 1
 LCD_COLS = 20
 LCD_ROWS = 4
 
-# Custom characters for the LCD
-# Block/bar character for the timeline
-CHAR_BLOCK = (0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F)
-CHAR_HALF  = (0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10)
+# Custom characters
+CHAR_BLOCK   = (0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F)
+CHAR_HALF    = (0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10)
 CHAR_ARROW_R = (0x00, 0x04, 0x06, 0x1F, 0x1F, 0x06, 0x04, 0x00)
 CHAR_ARROW_L = (0x00, 0x04, 0x0C, 0x1F, 0x1F, 0x0C, 0x04, 0x00)
-CHAR_CONN   = (0x00, 0x0E, 0x11, 0x04, 0x0A, 0x00, 0x04, 0x00)  # WiFi icon
+CHAR_CONN    = (0x00, 0x0E, 0x11, 0x04, 0x0A, 0x00, 0x04, 0x00)
 
 # Zustand
 current_year = DEFAULT_YEAR
-is_active = False
+active_count = 0
+active_clients = []     # [{year, id_short}, ...]
+last_event = ""         # z.B. "A3:F2 -> 2001"
 display_lock = threading.Lock()
 last_clk_state = None
 lcd = None
@@ -76,26 +92,47 @@ def get_epoch_name(year):
     return "MODERN"
 
 
-def get_state():
-    """Liest den aktuellen Zustand."""
-    global current_year, is_active
+def read_state():
+    """Liest das per-MAC State-File und extrahiert Gesamtbild."""
+    global current_year, active_count, active_clients, last_event
     try:
         data = json.loads(STATE_FILE.read_text())
-        current_year = data.get("year", DEFAULT_YEAR)
-        is_active = data.get("active", False)
+
+        # global_year als Default-Anzeige
+        current_year = data.get("global_year", DEFAULT_YEAR)
+
+        # Aktive Clients zaehlen
+        clients = data.get("clients", {})
+        active_clients = []
+        for mac, info in clients.items():
+            if info.get("active", False):
+                active_clients.append({
+                    "year": info.get("year", DEFAULT_YEAR),
+                    "id": mac[-5:],  # Letzte 5 Zeichen der MAC
+                })
+        active_count = len(active_clients)
+
     except (FileNotFoundError, json.JSONDecodeError):
         current_year = DEFAULT_YEAR
-        is_active = False
-    return current_year, is_active
+        active_count = 0
+        active_clients = []
 
 
-def set_state(year, active):
-    """Schreibt den Zustand in die gemeinsame Datei."""
-    global current_year, is_active
+def write_global_year(year):
+    """Schreibt nur das global_year in die State-Datei (ohne Clients zu aendern)."""
+    global current_year
     current_year = max(MIN_YEAR, min(MAX_YEAR, year))
-    is_active = active
-    state = {"year": current_year, "active": is_active}
-    STATE_FILE.write_text(json.dumps(state))
+
+    try:
+        if STATE_FILE.exists():
+            data = json.loads(STATE_FILE.read_text())
+        else:
+            data = {"clients": {}, "global_year": DEFAULT_YEAR}
+    except (json.JSONDecodeError, FileNotFoundError):
+        data = {"clients": {}, "global_year": DEFAULT_YEAR}
+
+    data["global_year"] = current_year
+    STATE_FILE.write_text(json.dumps(data, indent=2))
 
 
 def setup_gpio():
@@ -116,7 +153,7 @@ def setup_gpio():
 
 
 def rotary_callback(channel):
-    """Callback fuer Rotary Encoder Drehung."""
+    """Callback fuer Rotary Encoder Drehung - aendert global_year."""
     global current_year, last_clk_state
 
     clk_state = GPIO.input(PIN_CLK)
@@ -134,22 +171,19 @@ def rotary_callback(channel):
 
 
 def button_callback(channel):
-    """Callback fuer Button-Druck: Aktiviert/deaktiviert die Zeitreise."""
-    global is_active
-
+    """Button-Druck: Setzt das global_year (Default fuer neue Portal-Besucher)."""
     time.sleep(0.05)
     if GPIO.input(PIN_BTN) != GPIO.LOW:
         return
 
-    is_active = not is_active
-    set_state(current_year, is_active)
-    print(f"{'CONNECTED' if is_active else 'DISCONNECTED'}: Year {current_year}")
+    write_global_year(current_year)
+    print(f"Global year set to {current_year}")
 
-    if is_active:
-        play_async(play_dialup_sound)
-        show_connecting_animation()
-    else:
-        play_async(play_disconnect_sound)
+    # Kurze Bestaetigung auf dem Display
+    if HW_AVAILABLE and lcd is not None:
+        with display_lock:
+            _lcd_write_line(3, f" \x04 SET: {current_year} {get_epoch_name(current_year):>8s}")
+        time.sleep(1)
     update_display()
 
 
@@ -166,7 +200,6 @@ def setup_display():
             auto_linebreaks=False,
         )
     except Exception:
-        # Fallback: versuche alternative Adresse (PCF8574A)
         display = CharLCD(
             i2c_expander='PCF8574',
             address=0x3F,
@@ -177,7 +210,6 @@ def setup_display():
             auto_linebreaks=False,
         )
 
-    # Custom Characters laden
     display.create_char(0, CHAR_BLOCK)
     display.create_char(1, CHAR_HALF)
     display.create_char(2, CHAR_ARROW_R)
@@ -191,17 +223,16 @@ def setup_display():
 
 def _timeline_bar(year):
     """Erzeugt einen 20-Zeichen Zeitstrahl-Balken."""
-    # Position berechnen (0-18, da wir < und > brauchen)
     pos = int(((year - MIN_YEAR) / (MAX_YEAR - MIN_YEAR)) * 18)
-    bar = "\x03"  # Left arrow
+    bar = "\x03"
     for i in range(18):
         if i == pos:
-            bar += "\x00"  # Filled block = current position
+            bar += "\x00"
         elif i < pos:
             bar += "-"
         else:
-            bar += "\xA5"  # Middle dot
-    bar += "\x02"  # Right arrow
+            bar += "\xA5"
+    bar += "\x02"
     return bar
 
 
@@ -209,16 +240,17 @@ def update_display():
     """Aktualisiert die LCD-Anzeige."""
     if not HW_AVAILABLE:
         epoch = get_epoch_name(current_year)
-        bar = f"[{'=' * ((current_year - MIN_YEAR) * 18 // (MAX_YEAR - MIN_YEAR))}>"
-        bar = bar.ljust(20, '-') + ']'
-        print(f"\r[LCD]  CHRONOSURF          ", end="")
+        print(f"\r[LCD]  CHRONOSURF  surfers:{active_count}", end="")
         print(f"\n       <<< {current_year} >>> {epoch:>6s}", end="")
+        bar_pos = (current_year - MIN_YEAR) * 18 // (MAX_YEAR - MIN_YEAR)
+        bar = f"[{'=' * bar_pos}>{'-' * (18 - bar_pos)}]"
         print(f"\n       {bar}", end="")
-        if is_active:
-            print(f"\n       * CONNECTED         ", end="", flush=True)
+        if active_count > 0:
+            surfers = ", ".join(f"{c['id']}:{c['year']}" for c in active_clients[:3])
+            print(f"\n       \x04 {surfers}", end="", flush=True)
         else:
-            print(f"\n         Press to dial     ", end="", flush=True)
-        print("\033[4A", end="")  # Move cursor back up
+            print(f"\n         No surfers online", end="", flush=True)
+        print("\033[4A", end="")
         return
 
     with display_lock:
@@ -226,29 +258,37 @@ def update_display():
             epoch = get_epoch_name(current_year)
             timeline = _timeline_bar(current_year)
 
-            # Zeile 1: Header
-            line1 = "  CHRONOSURF".ljust(LCD_COLS)
+            # Zeile 1: Header + Surfer-Count
+            if active_count > 0:
+                line1 = f"CHRONOSURF  \x04{active_count} online"
+            else:
+                line1 = "CHRONOSURF"
 
             # Zeile 2: Jahr + Epoche
-            line2 = f"  <<< {current_year} >>> {epoch:>6s}".ljust(LCD_COLS)
+            line2 = f"  <<< {current_year} >>> {epoch:>6s}"
 
-            # Zeile 3: Timeline-Balken
+            # Zeile 3: Timeline
             line3 = timeline
 
-            # Zeile 4: Status
-            if is_active:
-                line4 = " \x04 CONNECTED".ljust(LCD_COLS)
+            # Zeile 4: Aktive Surfer oder "Waiting..."
+            if active_count > 0:
+                # Zeige aktive Surfer: "A3:F2>01 B4:C1>99"
+                parts = []
+                for c in active_clients[:2]:
+                    yr_short = str(c["year"])[2:]
+                    parts.append(f"{c['id']}>{yr_short}")
+                line4 = " ".join(parts)
             else:
-                line4 = "   Press to dial".ljust(LCD_COLS)
+                line4 = "  Waiting for surfers"
 
             lcd.home()
-            lcd.write_string(line1)
+            lcd.write_string(line1[:LCD_COLS].ljust(LCD_COLS))
             lcd.cursor_pos = (1, 0)
-            lcd.write_string(line2)
+            lcd.write_string(line2[:LCD_COLS].ljust(LCD_COLS))
             lcd.cursor_pos = (2, 0)
-            lcd.write_string(line3)
+            lcd.write_string(line3[:LCD_COLS].ljust(LCD_COLS))
             lcd.cursor_pos = (3, 0)
-            lcd.write_string(line4)
+            lcd.write_string(line4[:LCD_COLS].ljust(LCD_COLS))
 
         except Exception as e:
             print(f"LCD error: {e}")
@@ -262,8 +302,6 @@ def _lcd_write_line(row, text):
 
 def _lcd_scroll_up(new_line):
     """Scrollt alle Zeilen eins hoch und schreibt neue Zeile unten."""
-    # LCD hat kein Hardware-Scroll, also manuell:
-    # Wir nutzen einen Puffer
     _lcd_scroll_up._buf = getattr(_lcd_scroll_up, '_buf', [''] * LCD_ROWS)
     _lcd_scroll_up._buf.pop(0)
     _lcd_scroll_up._buf.append(new_line)
@@ -277,11 +315,9 @@ def _boot_type(text, delay=0.04):
     _lcd_scroll_up._buf.pop(0)
     _lcd_scroll_up._buf.append('')
 
-    # Obere Zeilen neu zeichnen
     for i in range(LCD_ROWS - 1):
         _lcd_write_line(i, _lcd_scroll_up._buf[i])
 
-    # Letzte Zeile zeichenweise tippen
     current = ''
     for ch in text[:LCD_COLS]:
         current += ch
@@ -321,14 +357,10 @@ def show_boot_screen():
             time.sleep(0.06)
         return
 
-    # LCD Puffer initialisieren
     _lcd_scroll_up._buf = [''] * LCD_ROWS
     lcd.clear()
 
-    # Boot-Sequenz - jede Zeile scrollt hoch wie ein Terminal
     boot_sequence = [
-        # (text, mode, delay_after)
-        # mode: 'type' = zeichenweise tippen, 'line' = sofort einblenden
         ("CHRONOSURF BIOS 1.0", "type", 0.3),
         ("(c)Temporal Net Inc.", "line", 0.4),
         ("", "line", 0.2),
@@ -358,55 +390,36 @@ def show_boot_screen():
         time.sleep(delay_after)
 
 
-def show_connecting_animation():
-    """Terminal-style Verbindungsanimation passend zum Web-UI Warp."""
+def show_surfer_connected(mac_short, year):
+    """Animation wenn ein Surfer sich ueber das Web-Portal verbindet."""
     if not HW_AVAILABLE or lcd is None:
+        print(f"[LCD] SURFER CONNECTED: {mac_short} -> {year}")
         return
 
     with display_lock:
-        lcd.clear()
+        # Kurze Animation: Flash-Nachricht auf dem Display
+        _lcd_write_line(3, f"\x04 {mac_short} > {year} ONLINE")
+    time.sleep(1.5)
+    update_display()
 
-        # Phase 1: Dial sequence
-        _lcd_write_line(0, f"DIAL IN >>> {current_year}")
-        _lcd_write_line(1, "")
-        _lcd_write_line(2, "")
-        _lcd_write_line(3, "")
-        time.sleep(0.3)
 
-        # Phase 2: Status messages (wie im Web-UI Warp-Overlay)
-        status_msgs = [
-            "Resolving coords...",
-            "Connecting to node..",
-            "Baud rate: 56000",
-            "Loading epoch data..",
-            "Rebuilding DOM...",
-        ]
+def show_surfer_disconnected(mac_short, year):
+    """Animation wenn ein Surfer sich trennt."""
+    if not HW_AVAILABLE or lcd is None:
+        print(f"[LCD] SURFER DISCONNECTED: {mac_short}")
+        return
 
-        for i, msg in enumerate(status_msgs):
-            _lcd_write_line(1, msg)
-
-            # Progress bar auf Zeile 2
-            filled = int((i + 1) / len(status_msgs) * LCD_COLS)
-            bar = "\x00" * filled + " " * (LCD_COLS - filled)
-            _lcd_write_line(2, bar)
-
-            pct = int((i + 1) / len(status_msgs) * 100)
-            _lcd_write_line(3, f"          [{pct:>3d}%]")
-            time.sleep(0.35)
-
-        # Phase 3: Connected!
-        _lcd_write_line(0, f"  >>> {current_year} <<<")
-        _lcd_write_line(1, "")
-        bar_full = "\x00" * LCD_COLS
-        _lcd_write_line(2, bar_full)
-        _lcd_write_line(3, "  LINK ESTABLISHED  ")
-        time.sleep(0.8)
+    with display_lock:
+        _lcd_write_line(3, f"  {mac_short} OFFLINE")
+    time.sleep(1)
+    update_display()
 
 
 def poll_state_changes():
-    """Ueberwacht Aenderungen der Zustandsdatei (z.B. vom Web-Portal)."""
-    global current_year, is_active
+    """Ueberwacht die State-Datei und reagiert auf Aenderungen."""
+    global active_count, active_clients, current_year
     last_mtime = 0
+    prev_active_macs = set()
 
     while True:
         try:
@@ -414,18 +427,53 @@ def poll_state_changes():
                 mtime = STATE_FILE.stat().st_mtime
                 if mtime != last_mtime:
                     last_mtime = mtime
+
+                    # Vorherigen Zustand merken
+                    old_active_macs = prev_active_macs.copy()
                     old_year = current_year
-                    old_active = is_active
-                    get_state()
-                    if current_year != old_year or is_active != old_active:
-                        update_display()
-                        if is_active != old_active:
-                            if is_active:
-                                play_async(play_dialup_sound)
-                            else:
-                                play_async(play_disconnect_sound)
-        except Exception:
-            pass
+
+                    # Neuen Zustand lesen
+                    read_state()
+
+                    # Aktive MACs ermitteln
+                    now_active_macs = set()
+                    mac_year_map = {}
+                    try:
+                        data = json.loads(STATE_FILE.read_text())
+                        for mac, info in data.get("clients", {}).items():
+                            if info.get("active", False):
+                                now_active_macs.add(mac)
+                                mac_year_map[mac] = info.get("year", DEFAULT_YEAR)
+                    except Exception:
+                        pass
+
+                    # Neue Verbindungen erkennen
+                    new_connections = now_active_macs - old_active_macs
+                    lost_connections = old_active_macs - now_active_macs
+
+                    for mac in new_connections:
+                        year = mac_year_map.get(mac, current_year)
+                        mac_short = mac[-5:]
+                        print(f"NEW SURFER: {mac_short} -> {year}")
+                        play_async(play_dialup_sound)
+                        show_surfer_connected(mac_short, year)
+
+                    for mac in lost_connections:
+                        mac_short = mac[-5:]
+                        print(f"SURFER LEFT: {mac_short}")
+                        play_async(play_disconnect_sound)
+                        show_surfer_disconnected(mac_short, current_year)
+
+                    prev_active_macs = now_active_macs
+
+                    # Display updaten wenn sich was geaendert hat
+                    # (auch ohne connect/disconnect, z.B. Jahreswechsel)
+                    if not new_connections and not lost_connections:
+                        if current_year != old_year or active_count != len(old_active_macs):
+                            update_display()
+
+        except Exception as e:
+            print(f"Poll error: {e}")
         time.sleep(1)
 
 
@@ -453,7 +501,7 @@ def main():
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    get_state()
+    read_state()
 
     if HW_AVAILABLE:
         print("Initializing hardware...")
@@ -474,8 +522,8 @@ def main():
     poll_thread = threading.Thread(target=poll_state_changes, daemon=True)
     poll_thread.start()
 
-    print(f"Running. Year: {current_year}, Active: {is_active}")
-    print("Rotate encoder to select year, press to connect.")
+    print(f"Running. Year: {current_year}, Active surfers: {active_count}")
+    print("Rotate encoder = select default year, press = confirm.")
 
     try:
         while True:
