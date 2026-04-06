@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeitmaschine - Statistiken</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="theme-{{ epoch_key }}" data-year="{{ my_state.year }}">
+    <div class="container">
+        <div class="crt-effect">
+            <h1 class="title glitch" data-text="STATISTIKEN">STATISTIKEN</h1>
+
+            <div class="machine-frame">
+                <!-- Globale Stats -->
+                <div class="stats-section">
+                    <h2 class="stats-title">SYSTEM</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-value">{{ total_connections }}</span>
+                            <span class="stat-label">Zeitreisen</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">{{ total_pages }}</span>
+                            <span class="stat-label">Seiten besucht</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">{{ client_count }}</span>
+                            <span class="stat-label">Zeitreisende</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">{{ active_clients | length }}</span>
+                            <span class="stat-label">Gerade aktiv</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aktive Reisende -->
+                {% if active_clients %}
+                <div class="stats-section">
+                    <h2 class="stats-title">AKTIVE ZEITREISENDE</h2>
+                    <div class="travelers-list">
+                        {% for client in active_clients %}
+                        <div class="traveler-row {% if client.id == client_id %}traveler-me{% endif %}">
+                            <span class="traveler-id">
+                                {{ client.id[:8] }}...
+                                {% if client.id == client_id %}<span class="badge-me">(DU)</span>{% endif %}
+                            </span>
+                            <span class="traveler-year">{{ client.year }}</span>
+                            <span class="traveler-epoch">
+                                {% if client.year <= 1999 %}90er
+                                {% elif client.year <= 2004 %}Y2K
+                                {% elif client.year <= 2009 %}Web2.0
+                                {% elif client.year <= 2015 %}Social
+                                {% else %}Modern{% endif %}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Meine Stats -->
+                <div class="stats-section">
+                    <h2 class="stats-title">DEIN LOGBUCH</h2>
+                    <div class="my-info">
+                        <p>Geraet: <code>{{ client_id }}</code></p>
+                        <p>Aktuelles Jahr: <strong>{{ my_state.year }}</strong></p>
+                        <p>Status: <span class="status-dot {% if my_state.active %}active{% else %}inactive{% endif %}"></span>
+                            {% if my_state.active %}Aktiv{% else %}Inaktiv{% endif %}</p>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-value">{{ my_stats.get('connections', 0) }}</span>
+                            <span class="stat-label">Deine Zeitreisen</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">{{ my_stats.get('pages_visited', 0) }}</span>
+                            <span class="stat-label">Seiten besucht</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">{{ my_stats.get('years_visited', []) | length }}</span>
+                            <span class="stat-label">Jahre besucht</span>
+                        </div>
+                    </div>
+
+                    {% if my_stats.get('years_visited') %}
+                    <div class="years-visited">
+                        <h3>Besuchte Jahre</h3>
+                        <div class="year-tags">
+                            {% for y in my_stats.get('years_visited', []) | sort %}
+                            <span class="year-tag">{{ y }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if my_domains %}
+                    <div class="top-domains">
+                        <h3>Meistbesuchte Seiten</h3>
+                        <div class="domain-list">
+                            {% for domain, count in my_domains %}
+                            <div class="domain-row">
+                                <span class="domain-name">{{ domain }}</span>
+                                <span class="domain-bar">
+                                    <span class="domain-bar-fill"
+                                          style="width: {{ (count / my_domains[0][1] * 100) | int }}%"></span>
+                                </span>
+                                <span class="domain-count">{{ count }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Navigation -->
+                <div class="info-panel">
+                    <div class="nav-links">
+                        <a href="/" class="nav-link">Zurueck zur Zeitmaschine</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

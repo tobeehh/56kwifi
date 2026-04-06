@@ -3,17 +3,15 @@
 56k WiFi Zeitmaschine - Wayback Machine Proxy
 
 Ein HTTP-Proxy, der alle Anfragen ueber die Wayback Machine des Internet Archive leitet.
-Das Ziel-Jahr wird aus der gemeinsamen Zustandsdatei gelesen.
+Das Ziel-Jahr wird pro Client (MAC-Adresse) aus der gemeinsamen Zustandsdatei gelesen.
 
 Laeuft als transparenter Proxy auf Port 8888.
 """
 
 import json
 import re
-import socket
 import threading
 import time
-import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -24,7 +22,6 @@ WAYBACK_BASE = "https://web.archive.org/web"
 PORTAL_IP = "192.168.4.1"
 PORTAL_PORT = 8080
 
-# Domains die nicht durch den Proxy geleitet werden sollen
 BYPASS_DOMAINS = {
     "zeitmaschine.local",
     "192.168.4.1",
@@ -32,28 +29,78 @@ BYPASS_DOMAINS = {
     "archive.org",
 }
 
-# Session fuer Connection-Pooling
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 })
 
+# Cache fuer IP->MAC und IP->Jahr Mapping (TTL 10s)
+_ip_cache = {}
+_ip_cache_lock = threading.Lock()
+_CACHE_TTL = 10
 
-def get_year():
-    """Liest das aktuell gesetzte Jahr aus der Zustandsdatei."""
+
+def _get_mac_for_ip(ip):
+    """Liest die MAC-Adresse aus der ARP-Tabelle."""
+    try:
+        with open("/proc/net/arp", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4 and parts[0] == ip:
+                    mac = parts[3]
+                    if mac != "00:00:00:00:00:00":
+                        return mac.upper()
+    except (FileNotFoundError, PermissionError):
+        pass
+    return ip
+
+
+def get_year_for_ip(client_ip):
+    """Liest das Jahr fuer eine bestimmte Client-IP (mit Cache)."""
+    now = time.time()
+
+    with _ip_cache_lock:
+        cached = _ip_cache.get(client_ip)
+        if cached and (now - cached["time"]) < _CACHE_TTL:
+            return cached["year"]
+
+    # Cache miss - State-File lesen
+    mac = _get_mac_for_ip(client_ip)
+    year = None
+
     try:
         data = json.loads(STATE_FILE.read_text())
-        if data.get("active", False):
-            return data.get("year", 1999)
+        client = data.get("clients", {}).get(mac, {})
+        if client.get("active", False):
+            year = client.get("year", None)
     except (FileNotFoundError, json.JSONDecodeError):
         pass
-    return None
+
+    with _ip_cache_lock:
+        _ip_cache[client_ip] = {"year": year, "time": now}
+
+    return year
+
+
+def track_visit(client_ip, domain):
+    """Sendet Besuchs-Tracking an das Portal (non-blocking)."""
+    def _track():
+        try:
+            requests.post(
+                f"http://127.0.0.1:{PORTAL_PORT}/api/track",
+                json={"ip": client_ip, "domain": domain},
+                timeout=2,
+            )
+        except Exception:
+            pass
+
+    thread = threading.Thread(target=_track, daemon=True)
+    thread.start()
 
 
 class WaybackProxyHandler(BaseHTTPRequestHandler):
     """HTTP-Handler der Anfragen ueber die Wayback Machine leitet."""
 
-    # Logging unterdruecken im Normalbetrieb
     def log_message(self, format, *args):
         pass
 
@@ -67,41 +114,36 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
         self._handle_request("HEAD")
 
     def _handle_request(self, method):
-        # Host aus dem Request extrahieren
         host = self.headers.get("Host", "").split(":")[0]
 
-        # Bypass fuer lokale Domains
         if host in BYPASS_DOMAINS or host == "":
             self._redirect_to_portal()
             return
 
-        # Captive Portal Detection abfangen
         if self._is_captive_check(host, self.path):
             self._redirect_to_portal()
             return
 
-        year = get_year()
+        # Jahr fuer diesen Client ermitteln (per MAC)
+        client_ip = self.client_address[0]
+        year = get_year_for_ip(client_ip)
 
-        # Wenn kein Jahr aktiv -> zum Portal leiten
         if year is None:
             self._redirect_to_portal()
             return
 
-        # Original-URL rekonstruieren
-        original_url = f"http://{host}{self.path}"
+        # Statistik tracken
+        track_visit(client_ip, host)
 
-        # Wayback Machine URL bauen
-        # Format: https://web.archive.org/web/YYYY/http://example.com/path
+        original_url = f"http://{host}{self.path}"
         wayback_url = f"{WAYBACK_BASE}/{year}/{original_url}"
 
         try:
-            # Request an Wayback Machine weiterleiten
             headers = {}
             for key in ["Accept", "Accept-Language", "Accept-Encoding"]:
                 if key in self.headers:
                     headers[key] = self.headers[key]
 
-            # POST-Body lesen falls vorhanden
             body = None
             if method == "POST":
                 content_length = int(self.headers.get("Content-Length", 0))
@@ -118,18 +160,14 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
                 stream=True,
             )
 
-            # Response zurueckgeben
             content = resp.content
 
-            # Wayback Machine Toolbar und Banner entfernen
-            content = self._strip_wayback_toolbar(content, resp.headers.get("Content-Type", ""))
-
-            # Wayback-URLs in der Antwort zurueckschreiben auf originale URLs
-            content = self._rewrite_urls(content, year, resp.headers.get("Content-Type", ""))
+            content_type = resp.headers.get("Content-Type", "")
+            content = self._strip_wayback_toolbar(content, content_type)
+            content = self._rewrite_urls(content, year, content_type)
 
             self.send_response(resp.status_code)
 
-            # Headers weiterleiten (gefiltert)
             skip_headers = {
                 "transfer-encoding", "content-encoding",
                 "content-length", "connection",
@@ -137,7 +175,6 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
             }
             for key, value in resp.headers.items():
                 if key.lower() not in skip_headers:
-                    # Wayback-spezifische Header nicht weiterleiten
                     if not key.lower().startswith("x-archive"):
                         self.send_header(key, value)
 
@@ -155,7 +192,6 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
             self._send_error(500, f"Zeitmaschine Fehler: {str(e)}")
 
     def _is_captive_check(self, host, path):
-        """Erkennt Captive-Portal-Detection-Anfragen."""
         captive_indicators = [
             "connectivitycheck", "captive.apple.com",
             "msftconnecttest", "detectportal",
@@ -167,13 +203,11 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
         return any(ind in check for ind in captive_indicators)
 
     def _redirect_to_portal(self):
-        """Leitet zum Captive Portal weiter."""
         self.send_response(302)
-        self.send_header("Location", f"http://zeitmaschine.local/")
+        self.send_header("Location", "http://zeitmaschine.local/")
         self.end_headers()
 
     def _strip_wayback_toolbar(self, content, content_type):
-        """Entfernt die Wayback Machine Toolbar aus HTML-Antworten."""
         if "text/html" not in content_type:
             return content
 
@@ -182,31 +216,22 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
         except Exception:
             return content
 
-        # Wayback Machine Toolbar-Div entfernen
         text = re.sub(
             r'<!-- BEGIN WAYBACK TOOLBAR INSERT -->.*?<!-- END WAYBACK TOOLBAR INSERT -->',
             '', text, flags=re.DOTALL
         )
-
-        # Wayback Machine Banner/Script entfernen
         text = re.sub(
             r'<script[^>]*>.*?__wm\.init\(.*?\).*?</script>',
             '', text, flags=re.DOTALL
         )
-
-        # wombat.js und andere Wayback-Scripte entfernen
         text = re.sub(
             r'<script[^>]*src="[^"]*/(wombat|wbhack|analytics|client-rewrite)[^"]*\.js"[^>]*></script>',
             '', text, flags=re.DOTALL
         )
-
-        # Wayback CSS entfernen
         text = re.sub(
             r'<link[^>]*href="[^"]*/_static/[^"]*"[^>]*/?>',
             '', text, flags=re.DOTALL
         )
-
-        # Banner div entfernen
         text = re.sub(
             r'<div\s+id="wm-ipp-base"[^>]*>.*?</div>\s*</div>\s*</div>',
             '', text, flags=re.DOTALL
@@ -215,7 +240,6 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
         return text.encode("utf-8")
 
     def _rewrite_urls(self, content, year, content_type):
-        """Schreibt Wayback-URLs zurueck auf die originalen URLs."""
         if "text/html" not in content_type and "text/css" not in content_type:
             return content
 
@@ -224,7 +248,6 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
         except Exception:
             return content
 
-        # URLs wie /web/2000/http://example.com -> http://example.com
         text = re.sub(
             r'(https?://web\.archive\.org)?/web/\d{1,14}[a-z_]*/?(https?://)',
             r'\2',
@@ -234,7 +257,6 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
         return text.encode("utf-8")
 
     def _send_error(self, code, message):
-        """Sendet eine Fehlerseite im Zeitmaschine-Stil."""
         body = f"""<!DOCTYPE html>
 <html><head><title>Zeitmaschine - Fehler</title>
 <style>
@@ -260,7 +282,6 @@ a {{ color: #00e5ff; }}
 
 
 class ThreadedHTTPServer(HTTPServer):
-    """HTTP Server mit Thread-Support."""
     allow_reuse_address = True
 
     def process_request(self, request, client_address):
