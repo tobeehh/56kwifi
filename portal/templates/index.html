@@ -131,12 +131,29 @@
                             <span class="section-title">LINE SPEED</span>
                             <span class="section-line"></span>
                         </div>
-                        <div class="speed-selector">
+
+                        <div class="auto-speed-toggle">
+                            <label class="toggle-label">
+                                <input type="checkbox" name="auto_speed" id="auto-speed-cb"
+                                       {% if auto_speed %}checked{% endif %}
+                                       onchange="toggleAutoSpeed(this.checked)">
+                                <span class="toggle-switch"></span>
+                                <span class="toggle-text">AUTO SPEED &mdash; match epoch</span>
+                            </label>
+                            <span class="auto-speed-hint" id="auto-speed-hint">
+                                {% if auto_speed %}
+                                Speed follows year: {{ speed_presets[speed].label }}
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <div class="speed-selector {% if auto_speed %}disabled{% endif %}" id="speed-selector">
                             {% for key, preset in speed_presets.items() %}
                             <label class="speed-option {% if speed == key %}selected{% endif %}"
                                    data-speed="{{ key }}" data-kbit="{{ preset.kbit }}">
                                 <input type="radio" name="speed" value="{{ key }}"
                                        {% if speed == key %}checked{% endif %}
+                                       {% if auto_speed %}disabled{% endif %}
                                        onchange="updateSpeed(this.value)">
                                 <span class="speed-name">{{ preset.label }}</span>
                                 <span class="speed-desc">{{ preset.desc }}</span>
@@ -147,11 +164,6 @@
                                 {% endif %}
                             </label>
                             {% endfor %}
-                        </div>
-                        <div class="speed-auto">
-                            <button type="button" class="btn-auto-speed" onclick="autoSpeed()">
-                                AUTO &mdash; match epoch
-                            </button>
                         </div>
                     </div>
 
@@ -314,6 +326,11 @@
             updateTimeline(year);
             updateTheme(year);
             updateSites(year);
+
+            // Auto-Speed: Speed folgt dem Jahr
+            if ($('auto-speed-cb').checked) {
+                autoSpeed();
+            }
         }
 
         function changeYear(d) {
@@ -337,7 +354,26 @@
             const radio = document.querySelector(`input[name="speed"][value="${speed}"]`);
             if (radio) {
                 radio.checked = true;
+                radio.disabled = false;
                 updateSpeed(speed);
+            }
+        }
+
+        function toggleAutoSpeed(enabled) {
+            const selector = $('speed-selector');
+            const radios = document.querySelectorAll('input[name="speed"]');
+            const hint = $('auto-speed-hint');
+
+            if (enabled) {
+                selector.classList.add('disabled');
+                radios.forEach(r => r.disabled = true);
+                autoSpeed();
+                hint.textContent = 'Speed follows year: ' +
+                    document.querySelector('.speed-option.selected .speed-name')?.textContent;
+            } else {
+                selector.classList.remove('disabled');
+                radios.forEach(r => r.disabled = false);
+                hint.textContent = '';
             }
         }
 

@@ -162,6 +162,18 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
 
             content = resp.content
 
+            # Wayback 404: Seite existierte in diesem Jahr nicht
+            if resp.status_code == 404 or (
+                resp.status_code == 200 and b"Wayback Machine has not archived" in content
+            ):
+                self._send_not_archived(host, year)
+                return
+
+            # Wayback Redirect-Seite (keine Snapshots gefunden)
+            if resp.status_code == 200 and b"Page cannot be crawled" in content:
+                self._send_not_archived(host, year)
+                return
+
             content_type = resp.headers.get("Content-Type", "")
             content = self._strip_wayback_toolbar(content, content_type)
             content = self._rewrite_urls(content, year, content_type)
@@ -255,6 +267,85 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
         )
 
         return text.encode("utf-8")
+
+    def _send_not_archived(self, host, year):
+        """Freundliche Seite wenn die Wayback Machine keinen Snapshot hat."""
+
+        # Naechstes/vorheriges verfuegbares Jahr vorschlagen
+        suggestions = ""
+        for delta in [-1, -2, 1, 2, -5, 5]:
+            alt_year = year + delta
+            if 1996 <= alt_year <= 2025:
+                suggestions += (
+                    f'<a href="http://chronosurf.local/set?year={alt_year}">'
+                    f'Try {alt_year}</a>  '
+                )
+
+        body = f"""<!DOCTYPE html>
+<html><head><title>CHRONOSURF - Not Archived</title>
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ background: #06080a; color: #c9d1d9; font-family: 'Consolas', monospace;
+       min-height: 100vh; display: flex; align-items: center; justify-content: center;
+       text-align: center; padding: 2rem; }}
+.container {{ max-width: 500px; }}
+.code {{ font-size: 5rem; font-weight: 700; color: #ff6b35;
+         text-shadow: 0 0 30px rgba(255,107,53,0.3); line-height: 1; }}
+h1 {{ font-size: 1.2rem; color: #ff6b35; margin: 1rem 0 0.5rem;
+      letter-spacing: 2px; }}
+.site {{ color: #58a6ff; font-size: 1.1rem; margin: 0.5rem 0; }}
+.year {{ color: #00ff41; font-weight: 700; }}
+.msg {{ color: #8b949e; font-size: 0.9rem; line-height: 1.6;
+        margin: 1.5rem 0; }}
+.ascii {{ color: #30363d; font-size: 0.7rem; line-height: 1.2;
+          margin: 1.5rem 0; }}
+.actions {{ margin-top: 1.5rem; display: flex; flex-direction: column;
+            gap: 0.8rem; align-items: center; }}
+a {{ color: #58a6ff; text-decoration: none; }}
+a:hover {{ text-decoration: underline; }}
+.btn {{ display: inline-block; padding: 0.5rem 1.5rem;
+        border: 1px solid #58a6ff; border-radius: 4px;
+        color: #58a6ff; font-family: inherit; font-size: 0.8rem;
+        letter-spacing: 1px; }}
+.btn:hover {{ background: #58a6ff; color: #06080a; text-decoration: none; }}
+.alts {{ margin-top: 1rem; font-size: 0.8rem; color: #8b949e; }}
+.alts a {{ color: #00ff41; margin: 0 0.3rem; padding: 0.2rem 0.5rem;
+           border: 1px solid #30363d; border-radius: 2px; }}
+.alts a:hover {{ border-color: #00ff41; text-decoration: none; }}
+</style></head>
+<body>
+<div class="container">
+<pre class="ascii">
+     _  _    ___  _  _
+    | || |  / _ \\| || |
+    | || |_| | | | || |_
+    |__   _| | | |__   _|
+       | | | |_| |  | |
+       |_|  \\___/   |_|
+</pre>
+<h1>NOT ARCHIVED</h1>
+<div class="site">{host}</div>
+<div class="msg">
+    This site was not archived by the Wayback Machine
+    in <span class="year">{year}</span>.<br>
+    It may not have existed yet, or was not crawled.
+</div>
+<div class="actions">
+    <a href="http://chronosurf.local/" class="btn">BACK TO CHRONOSURF</a>
+    <a href="http://chronosurf.local/set?year={year}">Change year</a>
+</div>
+<div class="alts">
+    Try another year: {suggestions}
+</div>
+</div>
+</body></html>"""
+
+        content = body.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
 
     def _send_error(self, code, message):
         body = f"""<!DOCTYPE html>

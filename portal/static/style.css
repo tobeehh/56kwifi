@@ -525,6 +525,78 @@ a:hover { text-decoration: underline; }
     margin-bottom: 1.2rem;
 }
 
+/* Auto-Speed Toggle */
+.auto-speed-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+    padding: 0.5rem 0.8rem;
+    background: var(--bg2);
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius);
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.toggle-label input[type="checkbox"] {
+    display: none;
+}
+
+.toggle-switch {
+    position: relative;
+    width: 36px; height: 18px;
+    background: var(--fg-muted);
+    border-radius: 9px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    background: var(--bg);
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+
+.toggle-label input:checked + .toggle-switch {
+    background: var(--fg);
+}
+
+.toggle-label input:checked + .toggle-switch::after {
+    transform: translateX(18px);
+}
+
+.toggle-text {
+    color: var(--fg-dim);
+    letter-spacing: 1px;
+}
+
+.toggle-label input:checked ~ .toggle-text {
+    color: var(--fg);
+}
+
+.auto-speed-hint {
+    font-size: 0.65rem;
+    color: var(--accent);
+    letter-spacing: 1px;
+}
+
+/* Speed selector disabled state */
+.speed-selector.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
 .speed-selector {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
