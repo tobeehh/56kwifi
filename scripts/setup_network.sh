@@ -8,11 +8,11 @@ AP_IP="192.168.4.1"
 AP_SUBNET="192.168.4.0/24"
 DHCP_RANGE_START="192.168.4.10"
 DHCP_RANGE_END="192.168.4.100"
-SSID="Zeitmaschine"
-WPA_PASSPHRASE="zeitreise"
-HOSTNAME="zeitmaschine"
+SSID="CHRONOSURF"
+WPA_PASSPHRASE="surfthetimeline"
+HOSTNAME="chronosurf"
 
-echo "=== 56k WiFi Zeitmaschine - Netzwerk-Setup ==="
+echo "=== CHRONOSURF - Netzwerk-Setup ==="
 
 # Pakete installieren
 echo "[1/6] Installiere benoetigte Pakete..."
@@ -29,7 +29,7 @@ fi
 # Avahi fuer .local Hostname-Aufloesung konfigurieren
 cat > /etc/avahi/avahi-daemon.conf << 'AVAHI'
 [server]
-host-name=zeitmaschine
+host-name=chronosurf
 domain-name=local
 use-ipv4=yes
 use-ipv6=no
@@ -112,7 +112,7 @@ address=/www.msftconnecttest.com/${AP_IP}
 address=/nmcheck.gnome.org/${AP_IP}
 
 # Lokaler Hostname
-address=/zeitmaschine.local/${AP_IP}
+address=/chronosurf.local/${AP_IP}
 DNSMASQ
 
 # IP-Forwarding und iptables

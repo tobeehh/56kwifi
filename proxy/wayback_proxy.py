@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-56k WiFi Zeitmaschine - Wayback Machine Proxy
+CHRONOSURF - Wayback Machine Proxy
 
 Ein HTTP-Proxy, der alle Anfragen ueber die Wayback Machine des Internet Archive leitet.
 Das Ziel-Jahr wird pro Client (MAC-Adresse) aus der gemeinsamen Zustandsdatei gelesen.
@@ -17,13 +17,13 @@ from pathlib import Path
 
 import requests
 
-STATE_FILE = Path("/tmp/zeitmaschine_state.json")
+STATE_FILE = Path("/tmp/chronosurf_state.json")
 WAYBACK_BASE = "https://web.archive.org/web"
 PORTAL_IP = "192.168.4.1"
 PORTAL_PORT = 8080
 
 BYPASS_DOMAINS = {
-    "zeitmaschine.local",
+    "chronosurf.local",
     "192.168.4.1",
     "web.archive.org",
     "archive.org",
@@ -185,11 +185,11 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
 
         except requests.exceptions.Timeout:
-            self._send_error(504, "Zeitmaschine: Die Wayback Machine antwortet nicht.")
+            self._send_error(504, "CHRONOSURF: Die Wayback Machine antwortet nicht.")
         except requests.exceptions.ConnectionError:
-            self._send_error(502, "Zeitmaschine: Keine Verbindung zur Wayback Machine.")
+            self._send_error(502, "CHRONOSURF: Keine Verbindung zur Wayback Machine.")
         except Exception as e:
-            self._send_error(500, f"Zeitmaschine Fehler: {str(e)}")
+            self._send_error(500, f"CHRONOSURF Fehler: {str(e)}")
 
     def _is_captive_check(self, host, path):
         captive_indicators = [
@@ -204,7 +204,7 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
 
     def _redirect_to_portal(self):
         self.send_response(302)
-        self.send_header("Location", "http://zeitmaschine.local/")
+        self.send_header("Location", "http://chronosurf.local/")
         self.end_headers()
 
     def _strip_wayback_toolbar(self, content, content_type):
@@ -258,7 +258,7 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
 
     def _send_error(self, code, message):
         body = f"""<!DOCTYPE html>
-<html><head><title>Zeitmaschine - Fehler</title>
+<html><head><title>CHRONOSURF - Fehler</title>
 <style>
 body {{ background: #0a0a0a; color: #ff0040; font-family: monospace;
        display: flex; align-items: center; justify-content: center;
@@ -270,7 +270,7 @@ a {{ color: #00e5ff; }}
 <body><div>
 <h1>FEHLER {code}</h1>
 <p>{message}</p>
-<p><a href="http://zeitmaschine.local/">Zurueck zum Portal</a></p>
+<p><a href="http://chronosurf.local/">Zurueck zum Portal</a></p>
 </div></body></html>"""
 
         content = body.encode("utf-8")
@@ -301,7 +301,7 @@ class ThreadedHTTPServer(HTTPServer):
 def main():
     port = 8888
     server = ThreadedHTTPServer(("0.0.0.0", port), WaybackProxyHandler)
-    print(f"Zeitmaschine Wayback-Proxy laeuft auf Port {port}")
+    print(f"CHRONOSURF Wayback-Proxy laeuft auf Port {port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

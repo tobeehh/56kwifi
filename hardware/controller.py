@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-56k WiFi Zeitmaschine - Hardware Controller
+CHRONOSURF - Hardware Controller
 
 Steuert den Rotary Encoder, SSD1306 Display und Button
 zur lokalen Jahresauswahl am Geraet.
@@ -38,7 +38,7 @@ from buzzer import (
 )
 
 # Konfiguration
-STATE_FILE = Path("/tmp/zeitmaschine_state.json")
+STATE_FILE = Path("/tmp/chronosurf_state.json")
 MIN_YEAR = 1996
 MAX_YEAR = 2025
 DEFAULT_YEAR = 1999
@@ -168,7 +168,7 @@ def update_display():
 def draw_interface(draw):
     """Zeichnet die Benutzeroberflaeche auf das Display."""
     # Titel
-    draw.text((20, 0), "ZEITMASCHINE", fill="white")
+    draw.text((15, 0), "CHRONOSURF", fill="white")
     draw.line([(0, 12), (127, 12)], fill="white")
 
     # Jahr gross in der Mitte
@@ -186,16 +186,16 @@ def draw_interface(draw):
     # Status
     if is_active:
         draw.rectangle([(0, 46), (127, 63)], fill="white")
-        draw.text((15, 48), "ZEITREISE AKTIV", fill="black")
+        draw.text((20, 48), "CONNECTED", fill="black")
     else:
         draw.rectangle([(0, 46), (127, 63)], outline="white")
-        draw.text((25, 48), "DRUECKE START", fill="white")
+        draw.text((25, 48), "PRESS TO DIAL", fill="white")
 
 
 def draw_boot_screen(draw):
     """Zeichnet den Boot-Screen."""
-    draw.text((10, 5), "56k WiFi", fill="white")
-    draw.text((10, 20), "ZEITMASCHINE", fill="white")
+    draw.text((10, 5), "CHRONOSURF", fill="white")
+    draw.text((10, 20), "Surf the Timeline", fill="white")
     draw.line([(0, 35), (127, 35)], fill="white")
     draw.text((10, 42), "Starte...", fill="white")
 
@@ -240,7 +240,7 @@ def cleanup(signum=None, frame=None):
 def main():
     global device
 
-    print("56k WiFi Zeitmaschine - Hardware Controller")
+    print("CHRONOSURF - Hardware Controller")
 
     # Signale abfangen
     signal.signal(signal.SIGINT, cleanup)

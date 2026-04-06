@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-56k WiFi Zeitmaschine - Captive Portal & Proxy Controller
+CHRONOSURF - Captive Portal & Proxy Controller
 
-Stellt ein Web-Portal bereit, ueber das Nutzer ein Jahr auswaehlen koennen.
-Leitet dann den gesamten Web-Traffic ueber die Wayback Machine.
-
+Web-Portal zur Jahresauswahl. Leitet Web-Traffic ueber die Wayback Machine.
 State ist pro MAC-Adresse: Jedes Geraet kann ein eigenes Jahr waehlen.
 """
 
@@ -21,8 +19,8 @@ from flask import (
 app = Flask(__name__)
 
 # Zustandsdatei fuer alle Clients
-STATE_FILE = Path("/tmp/zeitmaschine_state.json")
-STATS_FILE = Path("/tmp/zeitmaschine_stats.json")
+STATE_FILE = Path("/tmp/chronosurf_state.json")
+STATS_FILE = Path("/tmp/chronosurf_stats.json")
 DEFAULT_YEAR = 1999
 
 # Lock fuer thread-sichere Zugriffe
@@ -300,25 +298,25 @@ def track_page_visit(client_ip, domain):
 @app.route("/generate_204")
 @app.route("/gen_204")
 def android_captive():
-    return redirect("http://zeitmaschine.local/", code=302)
+    return redirect("http://chronosurf.local/", code=302)
 
 
 @app.route("/hotspot-detect.html")
 @app.route("/library/test/success.html")
 def apple_captive():
-    return redirect("http://zeitmaschine.local/", code=302)
+    return redirect("http://chronosurf.local/", code=302)
 
 
 @app.route("/connecttest.txt")
 @app.route("/ncsi.txt")
 def windows_captive():
-    return redirect("http://zeitmaschine.local/", code=302)
+    return redirect("http://chronosurf.local/", code=302)
 
 
 @app.route("/canonical.html")
 @app.route("/success.txt")
 def firefox_captive():
-    return redirect("http://zeitmaschine.local/", code=302)
+    return redirect("http://chronosurf.local/", code=302)
 
 
 # --- Haupt-Routen ---
@@ -438,8 +436,8 @@ def api_year_for_ip(ip):
 @app.route("/<path:path>")
 def catch_all(path):
     host = request.host.split(":")[0]
-    if host != "zeitmaschine.local" and host != "192.168.4.1":
-        return redirect("http://zeitmaschine.local/", code=302)
+    if host != "chronosurf.local" and host != "192.168.4.1":
+        return redirect("http://chronosurf.local/", code=302)
     return redirect("/")
 
 

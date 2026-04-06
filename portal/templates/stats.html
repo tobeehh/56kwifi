@@ -3,126 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zeitmaschine - Statistiken</title>
+    <title>CHRONOSURF :: STATS</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="theme-{{ epoch_key }}" data-year="{{ my_state.year }}">
-    <div class="container">
-        <div class="crt-effect">
-            <h1 class="title glitch" data-text="STATISTIKEN">STATISTIKEN</h1>
+    <div class="scanlines"></div>
 
-            <div class="machine-frame">
-                <!-- Globale Stats -->
-                <div class="stats-section">
-                    <h2 class="stats-title">SYSTEM</h2>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <span class="stat-value">{{ total_connections }}</span>
-                            <span class="stat-label">Zeitreisen</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value">{{ total_pages }}</span>
-                            <span class="stat-label">Seiten besucht</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value">{{ client_count }}</span>
-                            <span class="stat-label">Zeitreisende</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value">{{ active_clients | length }}</span>
-                            <span class="stat-label">Gerade aktiv</span>
-                        </div>
+    <div class="main-wrapper visible">
+        <header class="stats-header">
+            <pre class="ascii-logo">
+ ██████╗██╗  ██╗██████╗  ██████╗ ███╗   ██╗ ██████╗ ███████╗██╗   ██╗██████╗ ███████╗
+██╔════╝██║  ██║██╔══██╗██╔═══██╗████╗  ██║██╔═══██╗██╔════╝██║   ██║██╔══██╗██╔════╝
+██║     ███████║██████╔╝██║   ██║██╔██╗ ██║██║   ██║███████╗██║   ██║██████╔╝█████╗
+██║     ██╔══██║██╔══██╗██║   ██║██║╚██╗██║██║   ██║╚════██║██║   ██║██╔══██╗██╔══╝
+╚██████╗██║  ██║██║  ██║╚██████╔╝██║ ╚████║╚██████╔╝███████║╚██████╔╝██║  ██║██║
+ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝</pre>
+            <div class="tagline">[ SYSTEM STATISTICS ]</div>
+        </header>
+
+        <main class="content">
+            <!-- Global Stats -->
+            <section class="stats-section">
+                <div class="stats-section-title">
+                    <span class="section-line"></span>
+                    <span class="section-title">GLOBAL TELEMETRY</span>
+                    <span class="section-line"></span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value">{{ total_connections }}</span>
+                        <span class="stat-label">TIME JUMPS</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">{{ total_pages }}</span>
+                        <span class="stat-label">PAGES LOADED</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">{{ client_count }}</span>
+                        <span class="stat-label">TOTAL SURFERS</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">{{ active_clients | length }}</span>
+                        <span class="stat-label">ACTIVE NOW</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Active Travelers -->
+            {% if active_clients %}
+            <section class="stats-section">
+                <div class="stats-section-title">
+                    <span class="section-line"></span>
+                    <span class="section-title">ACTIVE CONNECTIONS</span>
+                    <span class="section-line"></span>
+                </div>
+                <div class="travelers-table">
+                    {% for client in active_clients %}
+                    <div class="travelers-row {% if client.id == client_id %}is-me{% endif %}">
+                        <span class="travelers-id">
+                            {{ client.id[:8] }}...
+                            {% if client.id == client_id %}<span class="badge-me">YOU</span>{% endif %}
+                        </span>
+                        <span class="travelers-year">{{ client.year }}</span>
+                        <span class="travelers-epoch">
+                            {% if client.year <= 1999 %}90s
+                            {% elif client.year <= 2004 %}Y2K
+                            {% elif client.year <= 2009 %}WEB2.0
+                            {% elif client.year <= 2015 %}SOCIAL
+                            {% else %}MODERN{% endif %}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Personal Logbook -->
+            <section class="stats-section">
+                <div class="stats-section-title">
+                    <span class="section-line"></span>
+                    <span class="section-title">YOUR LOGBOOK</span>
+                    <span class="section-line"></span>
+                </div>
+
+                <div class="logbook-info">
+                    <div>DEVICE: <code>{{ client_id }}</code></div>
+                    <div>TARGET: <strong>{{ my_state.year }}</strong></div>
+                    <div>STATUS:
+                        <span class="status-indicator {% if my_state.active %}active{% endif %}"
+                              style="display:inline-block;vertical-align:middle;width:8px;height:8px;border-radius:50;"></span>
+                        {% if my_state.active %} CONNECTED{% else %} STANDBY{% endif %}
                     </div>
                 </div>
 
-                <!-- Aktive Reisende -->
-                {% if active_clients %}
-                <div class="stats-section">
-                    <h2 class="stats-title">AKTIVE ZEITREISENDE</h2>
-                    <div class="travelers-list">
-                        {% for client in active_clients %}
-                        <div class="traveler-row {% if client.id == client_id %}traveler-me{% endif %}">
-                            <span class="traveler-id">
-                                {{ client.id[:8] }}...
-                                {% if client.id == client_id %}<span class="badge-me">(DU)</span>{% endif %}
-                            </span>
-                            <span class="traveler-year">{{ client.year }}</span>
-                            <span class="traveler-epoch">
-                                {% if client.year <= 1999 %}90er
-                                {% elif client.year <= 2004 %}Y2K
-                                {% elif client.year <= 2009 %}Web2.0
-                                {% elif client.year <= 2015 %}Social
-                                {% else %}Modern{% endif %}
-                            </span>
-                        </div>
-                        {% endfor %}
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value">{{ my_stats.get('connections', 0) }}</span>
+                        <span class="stat-label">YOUR JUMPS</span>
                     </div>
+                    <div class="stat-card">
+                        <span class="stat-value">{{ my_stats.get('pages_visited', 0) }}</span>
+                        <span class="stat-label">PAGES LOADED</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value">{{ my_stats.get('years_visited', []) | length }}</span>
+                        <span class="stat-label">YEARS VISITED</span>
+                    </div>
+                </div>
+
+                {% if my_stats.get('years_visited') %}
+                <div class="sub-title">VISITED YEARS</div>
+                <div class="year-tags">
+                    {% for y in my_stats.get('years_visited', []) | sort %}
+                    <span class="year-tag">{{ y }}</span>
+                    {% endfor %}
                 </div>
                 {% endif %}
 
-                <!-- Meine Stats -->
-                <div class="stats-section">
-                    <h2 class="stats-title">DEIN LOGBUCH</h2>
-                    <div class="my-info">
-                        <p>Geraet: <code>{{ client_id }}</code></p>
-                        <p>Aktuelles Jahr: <strong>{{ my_state.year }}</strong></p>
-                        <p>Status: <span class="status-dot {% if my_state.active %}active{% else %}inactive{% endif %}"></span>
-                            {% if my_state.active %}Aktiv{% else %}Inaktiv{% endif %}</p>
+                {% if my_domains %}
+                <div class="sub-title">TOP DESTINATIONS</div>
+                <div class="domain-list">
+                    {% for domain, count in my_domains %}
+                    <div class="domain-row">
+                        <span class="domain-name">{{ domain }}</span>
+                        <span class="domain-bar">
+                            <span class="domain-bar-fill"
+                                  style="width: {{ (count / my_domains[0][1] * 100) | int }}%"></span>
+                        </span>
+                        <span class="domain-count">{{ count }}</span>
                     </div>
-
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <span class="stat-value">{{ my_stats.get('connections', 0) }}</span>
-                            <span class="stat-label">Deine Zeitreisen</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value">{{ my_stats.get('pages_visited', 0) }}</span>
-                            <span class="stat-label">Seiten besucht</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value">{{ my_stats.get('years_visited', []) | length }}</span>
-                            <span class="stat-label">Jahre besucht</span>
-                        </div>
-                    </div>
-
-                    {% if my_stats.get('years_visited') %}
-                    <div class="years-visited">
-                        <h3>Besuchte Jahre</h3>
-                        <div class="year-tags">
-                            {% for y in my_stats.get('years_visited', []) | sort %}
-                            <span class="year-tag">{{ y }}</span>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if my_domains %}
-                    <div class="top-domains">
-                        <h3>Meistbesuchte Seiten</h3>
-                        <div class="domain-list">
-                            {% for domain, count in my_domains %}
-                            <div class="domain-row">
-                                <span class="domain-name">{{ domain }}</span>
-                                <span class="domain-bar">
-                                    <span class="domain-bar-fill"
-                                          style="width: {{ (count / my_domains[0][1] * 100) | int }}%"></span>
-                                </span>
-                                <span class="domain-count">{{ count }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
+                    {% endfor %}
                 </div>
+                {% endif %}
+            </section>
 
-                <!-- Navigation -->
-                <div class="info-panel">
-                    <div class="nav-links">
-                        <a href="/" class="nav-link">Zurueck zur Zeitmaschine</a>
-                    </div>
-                </div>
+            <div class="stats-nav">
+                <a href="/">BACK TO CHRONOSURF</a>
             </div>
-        </div>
+        </main>
     </div>
 </body>
 </html>

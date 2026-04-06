@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-56k WiFi Zeitmaschine - Modem-Sound Buzzer
+CHRONOSURF - Modem-Sound Buzzer
 
 Simuliert den klassischen 56k Modem-Einwahlsound ueber einen passiven Buzzer
 per PWM auf GPIO 22.

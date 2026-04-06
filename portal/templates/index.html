@@ -3,262 +3,373 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zeitmaschine</title>
+    <title>CHRONOSURF</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="theme-{{ epoch_key }}" data-year="{{ year }}">
-    <div class="container">
-        <div class="crt-effect">
-            <h1 class="title glitch" data-text="ZEITMASCHINE">ZEITMASCHINE</h1>
 
-            <div class="machine-frame">
-                <!-- Display Panel -->
-                <div class="display-panel">
-                    <div class="year-display">
-                        <span class="label">ZIEL-JAHR</span>
-                        <span id="year-value" class="value">{{ year }}</span>
-                    </div>
-                    <div class="epoch-badge" id="epoch-badge">{{ epoch_label }}</div>
-                    <div class="status-display">
-                        <span class="status-dot {% if active %}active{% else %}inactive{% endif %}"></span>
-                        <span class="status-text">
-                            {% if active %}ZEITREISE AKTIV{% else %}BEREIT{% endif %}
-                        </span>
+    <!-- Boot Sequence (nur beim ersten Laden) -->
+    <div class="boot-screen" id="boot-screen">
+        <div class="boot-content">
+            <pre class="boot-text" id="boot-text"></pre>
+            <div class="boot-cursor">_</div>
+        </div>
+    </div>
+
+    <!-- Hauptinhalt -->
+    <div class="main-wrapper" id="main-wrapper">
+        <div class="scanlines"></div>
+
+        <header class="header">
+            <pre class="ascii-logo">
+ ██████╗██╗  ██╗██████╗  ██████╗ ███╗   ██╗ ██████╗ ███████╗██╗   ██╗██████╗ ███████╗
+██╔════╝██║  ██║██╔══██╗██╔═══██╗████╗  ██║██╔═══██╗██╔════╝██║   ██║██╔══██╗██╔════╝
+██║     ███████║██████╔╝██║   ██║██╔██╗ ██║██║   ██║███████╗██║   ██║██████╔╝█████╗
+██║     ██╔══██║██╔══██╗██║   ██║██║╚██╗██║██║   ██║╚════██║██║   ██║██╔══██╗██╔══╝
+╚██████╗██║  ██║██║  ██║╚██████╔╝██║ ╚████║╚██████╔╝███████║╚██████╔╝██║  ██║██║
+ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝</pre>
+            <div class="tagline">[ SURF THE TIMELINE ]</div>
+            <div class="header-bar">
+                <span class="header-item">SIGNAL: <span class="blink-dot">*</span> ONLINE</span>
+                <span class="header-item">BAUD: 56000</span>
+                <span class="header-item">EPOCH: <span id="header-epoch">{{ epoch_label }}</span></span>
+                <span class="header-item"><a href="/stats" class="header-link">SYS::STATS</a></span>
+            </div>
+        </header>
+
+        <main class="content">
+            <!-- Zeitanzeige -->
+            <section class="time-display">
+                <div class="time-display-inner">
+                    <div class="time-label">TARGET YEAR</div>
+                    <div class="time-year" id="year-value">{{ year }}</div>
+                    <div class="time-epoch" id="epoch-badge">{{ epoch_label }}</div>
+                    <div class="time-status">
+                        {% if active %}
+                        <span class="status-indicator active"></span>
+                        <span class="status-label">CONNECTED &mdash; ROUTING THROUGH WAYBACK MACHINE</span>
+                        {% else %}
+                        <span class="status-indicator"></span>
+                        <span class="status-label">READY &mdash; SELECT YEAR TO BEGIN</span>
+                        {% endif %}
                     </div>
                 </div>
+            </section>
 
-                <!-- Zeitstrahl / Timeline -->
-                <div class="timeline-container">
-                    <div class="timeline">
-                        <div class="timeline-track">
-                            <div class="timeline-fill" id="timeline-fill"></div>
-                            <div class="timeline-marker" id="timeline-marker">
-                                <span class="timeline-marker-year" id="timeline-marker-year">{{ year }}</span>
-                            </div>
-                        </div>
-                        <div class="timeline-labels">
-                            <span>1996</span>
-                            <span>2000</span>
-                            <span>2005</span>
-                            <span>2010</span>
-                            <span>2015</span>
-                            <span>2020</span>
-                            <span>2025</span>
-                        </div>
-                        <div class="timeline-epochs">
-                            <div class="timeline-epoch epoch-90er" style="left:0%;width:13.8%">90er</div>
-                            <div class="timeline-epoch epoch-y2k" style="left:13.8%;width:17.2%">Y2K</div>
-                            <div class="timeline-epoch epoch-web2" style="left:31%;width:17.2%">Web2.0</div>
-                            <div class="timeline-epoch epoch-social" style="left:48.2%;width:20.7%">Social</div>
-                            <div class="timeline-epoch epoch-modern" style="left:68.9%;width:31.1%">Modern</div>
-                        </div>
+            <!-- Timeline -->
+            <section class="timeline-section">
+                <div class="timeline-bar">
+                    <div class="timeline-fill" id="timeline-fill"></div>
+                    <div class="timeline-thumb" id="timeline-thumb">
+                        <span class="timeline-thumb-label" id="timeline-thumb-label">{{ year }}</span>
                     </div>
-                    <input type="range" id="timeline-slider" min="1996" max="2025"
-                           value="{{ year }}" class="timeline-slider">
                 </div>
+                <input type="range" id="timeline-slider" min="1996" max="2025"
+                       value="{{ year }}" class="timeline-range">
+                <div class="timeline-ticks">
+                    <span data-year="1996">96</span>
+                    <span data-year="1998">98</span>
+                    <span data-year="2000">00</span>
+                    <span data-year="2002">02</span>
+                    <span data-year="2004">04</span>
+                    <span data-year="2006">06</span>
+                    <span data-year="2008">08</span>
+                    <span data-year="2010">10</span>
+                    <span data-year="2012">12</span>
+                    <span data-year="2014">14</span>
+                    <span data-year="2016">16</span>
+                    <span data-year="2018">18</span>
+                    <span data-year="2020">20</span>
+                    <span data-year="2022">22</span>
+                    <span data-year="2025">25</span>
+                </div>
+                <div class="timeline-epochs-bar">
+                    <div class="tl-epoch tl-90er">90s</div>
+                    <div class="tl-epoch tl-y2k">Y2K</div>
+                    <div class="tl-epoch tl-web2">WEB2.0</div>
+                    <div class="tl-epoch tl-social">SOCIAL</div>
+                    <div class="tl-epoch tl-modern">NOW</div>
+                </div>
+            </section>
 
-                <!-- Controls -->
-                <form method="POST" action="/set" class="controls">
-                    <div class="year-selector">
-                        <button type="button" class="btn-arrow" onclick="changeYear(-10)">&laquo;</button>
-                        <button type="button" class="btn-arrow" onclick="changeYear(-1)">&lsaquo;</button>
+            <!-- Controls -->
+            <section class="controls-section">
+                <form method="POST" action="/set" id="travel-form">
+                    <div class="dial-controls">
+                        <button type="button" class="dial-btn dial-fast-back" onclick="changeYear(-10)">
+                            <span class="dial-icon">&laquo;</span><span class="dial-label">-10</span>
+                        </button>
+                        <button type="button" class="dial-btn dial-back" onclick="changeYear(-1)">
+                            <span class="dial-icon">&lsaquo;</span><span class="dial-label">-1</span>
+                        </button>
                         <input type="number" name="year" id="year-input"
                                value="{{ year }}" min="1996" max="2025"
-                               class="year-input">
-                        <button type="button" class="btn-arrow" onclick="changeYear(1)">&rsaquo;</button>
-                        <button type="button" class="btn-arrow" onclick="changeYear(10)">&raquo;</button>
+                               class="dial-input">
+                        <button type="button" class="dial-btn dial-fwd" onclick="changeYear(1)">
+                            <span class="dial-icon">&rsaquo;</span><span class="dial-label">+1</span>
+                        </button>
+                        <button type="button" class="dial-btn dial-fast-fwd" onclick="changeYear(10)">
+                            <span class="dial-icon">&raquo;</span><span class="dial-label">+10</span>
+                        </button>
                     </div>
 
-                    <div class="epoch-buttons">
-                        <button type="button" class="btn-epoch" onclick="setYear(1997)">1997</button>
-                        <button type="button" class="btn-epoch" onclick="setYear(2000)">2000</button>
-                        <button type="button" class="btn-epoch" onclick="setYear(2005)">2005</button>
-                        <button type="button" class="btn-epoch" onclick="setYear(2010)">2010</button>
-                        <button type="button" class="btn-epoch" onclick="setYear(2015)">2015</button>
-                        <button type="button" class="btn-epoch" onclick="setYear(2020)">2020</button>
+                    <div class="quick-years">
+                        <button type="button" onclick="setYear(1997)" class="qy">97</button>
+                        <button type="button" onclick="setYear(1999)" class="qy">99</button>
+                        <button type="button" onclick="setYear(2001)" class="qy">01</button>
+                        <button type="button" onclick="setYear(2004)" class="qy">04</button>
+                        <button type="button" onclick="setYear(2007)" class="qy">07</button>
+                        <button type="button" onclick="setYear(2010)" class="qy">10</button>
+                        <button type="button" onclick="setYear(2014)" class="qy">14</button>
+                        <button type="button" onclick="setYear(2020)" class="qy">20</button>
                     </div>
 
-                    <button type="submit" class="btn-travel" id="btn-travel">
-                        <span class="btn-text">ZEITREISE STARTEN</span>
+                    <button type="submit" class="btn-connect" id="btn-connect">
+                        <span class="btn-connect-icon">&gt;</span>
+                        <span class="btn-connect-text">DIAL IN &mdash; CONNECT TO <span id="btn-year">{{ year }}</span></span>
                     </button>
                 </form>
 
                 {% if active %}
-                <form method="POST" action="/disconnect" class="disconnect-form">
-                    <button type="submit" class="btn-disconnect">
-                        ZURUECK ZUR GEGENWART
+                <form method="POST" action="/disconnect">
+                    <button type="submit" class="btn-hangup">
+                        <span class="btn-hangup-icon">x</span>
+                        <span class="btn-hangup-text">HANG UP &mdash; RETURN TO PRESENT</span>
                     </button>
                 </form>
                 {% endif %}
+            </section>
 
-                <!-- Favoriten -->
-                <div class="favorites-section" id="favorites-section">
-                    <h2 class="favorites-title" id="favorites-title">
-                        Zeitreise-Tipps: {{ epoch_label }}
-                    </h2>
-                    <div class="favorites-grid" id="favorites-grid">
-                        {% for site in favorites %}
-                        <a href="http://{{ site.url }}" class="favorite-card" target="_blank">
-                            <span class="favorite-name">{{ site.name }}</span>
-                            <span class="favorite-desc">{{ site.desc }}</span>
-                            <span class="favorite-url">{{ site.url }}</span>
-                        </a>
-                        {% endfor %}
-                    </div>
+            <!-- Favoriten -->
+            <section class="sites-section" id="sites-section">
+                <div class="section-header">
+                    <span class="section-line"></span>
+                    <span class="section-title" id="sites-title">DESTINATIONS: {{ epoch_label }}</span>
+                    <span class="section-line"></span>
                 </div>
+                <div class="sites-grid" id="sites-grid">
+                    {% for site in favorites %}
+                    <a href="http://{{ site.url }}" class="site-card" target="_blank">
+                        <div class="site-name">{{ site.name }}</div>
+                        <div class="site-desc">{{ site.desc }}</div>
+                        <div class="site-url">&gt; {{ site.url }}</div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </section>
 
-                <!-- Info & Links -->
-                <div class="info-panel">
-                    <p>Du surfst im Internet von <strong id="info-year">{{ year }}</strong>
-                       ueber das <a href="https://web.archive.org" target="_blank">Internet Archive</a>.</p>
-                    <p class="client-info">Dein Geraet: <code>{{ client_id }}</code></p>
-                    <div class="nav-links">
-                        <a href="/stats" class="nav-link">Statistiken</a>
-                    </div>
+            <!-- Footer Info -->
+            <footer class="footer">
+                <div class="footer-line">
+                    CHRONOSURF v1.0 // Powered by
+                    <a href="https://web.archive.org" target="_blank">Internet Archive Wayback Machine</a>
                 </div>
+                <div class="footer-line dim">
+                    Device: {{ client_id }} // Host: chronosurf.local // IP: 192.168.4.1
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Warp Overlay -->
+    <div class="warp-overlay" id="warp-overlay">
+        <div class="warp-content">
+            <div class="warp-years">
+                <span class="warp-from" id="warp-from">{{ year }}</span>
+                <span class="warp-arrow">&gt;&gt;&gt;</span>
+                <span class="warp-to" id="warp-to">{{ year }}</span>
             </div>
+            <pre class="warp-ascii">
+    *    .  *       .             *
+        .        .        .   *        .
+  *   .     WARPING THROUGH TIME      .
+        .        .        .   .    *
+    .        *        .             .   *
+            </pre>
+            <div class="warp-bar">
+                <div class="warp-bar-fill" id="warp-bar-fill"></div>
+            </div>
+            <div class="warp-status" id="warp-status">INITIALIZING TEMPORAL LINK...</div>
         </div>
     </div>
 
-    <!-- Zeitreise-Animation Overlay -->
-    <div class="travel-overlay" id="travel-overlay">
-        <div class="travel-animation">
-            <div class="travel-year" id="travel-year">{{ year }}</div>
-            <div class="travel-text">ZEITREISE...</div>
-            <div class="travel-warp">
-                <div class="warp-line"></div>
-                <div class="warp-line"></div>
-                <div class="warp-line"></div>
-                <div class="warp-line"></div>
-                <div class="warp-line"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Favoriten-Daten fuer JS -->
     <script id="favorites-data" type="application/json">{{ favorites_data | tojson }}</script>
 
     <script>
-        const yearInput = document.getElementById('year-input');
-        const yearValue = document.getElementById('year-value');
-        const infoYear = document.getElementById('info-year');
-        const timelineSlider = document.getElementById('timeline-slider');
-        const timelineFill = document.getElementById('timeline-fill');
-        const timelineMarker = document.getElementById('timeline-marker');
-        const timelineMarkerYear = document.getElementById('timeline-marker-year');
-        const epochBadge = document.getElementById('epoch-badge');
-        const favoritesTitle = document.getElementById('favorites-title');
-        const favoritesGrid = document.getElementById('favorites-grid');
+        // === Elements ===
+        const $ = id => document.getElementById(id);
+        const yearInput = $('year-input');
+        const yearValue = $('year-value');
+        const epochBadge = $('epoch-badge');
+        const headerEpoch = $('header-epoch');
+        const btnYear = $('btn-year');
+        const timelineSlider = $('timeline-slider');
+        const timelineFill = $('timeline-fill');
+        const timelineThumb = $('timeline-thumb');
+        const timelineThumbLabel = $('timeline-thumb-label');
+        const sitesTitle = $('sites-title');
+        const sitesGrid = $('sites-grid');
         const body = document.body;
 
-        const favoritesData = JSON.parse(document.getElementById('favorites-data').textContent);
+        const favoritesData = JSON.parse($('favorites-data').textContent);
 
         const epochs = {
-            '90er':   { min: 1996, max: 1999, label: 'Die 90er' },
-            'y2k':    { min: 2000, max: 2004, label: 'Y2K Aera' },
-            'web2':   { min: 2005, max: 2009, label: 'Web 2.0' },
-            'social': { min: 2010, max: 2015, label: 'Social Media' },
-            'modern': { min: 2016, max: 2025, label: 'Modern' },
+            '90er':   { min: 1996, max: 1999, label: 'THE 90s' },
+            'y2k':    { min: 2000, max: 2004, label: 'Y2K ERA' },
+            'web2':   { min: 2005, max: 2009, label: 'WEB 2.0' },
+            'social': { min: 2010, max: 2015, label: 'SOCIAL AGE' },
+            'modern': { min: 2016, max: 2025, label: 'MODERN' },
         };
 
-        function getEpochForYear(year) {
-            for (const [key, ep] of Object.entries(epochs)) {
-                if (year >= ep.min && year <= ep.max) return key;
-            }
+        function getEpoch(year) {
+            for (const [k, e] of Object.entries(epochs))
+                if (year >= e.min && year <= e.max) return k;
             return '90er';
         }
 
-        function getTimelinePercent(year) {
-            return ((year - 1996) / (2025 - 1996)) * 100;
-        }
+        function pct(year) { return ((year - 1996) / 29) * 100; }
 
         function updateTimeline(year) {
-            const pct = getTimelinePercent(year);
-            timelineFill.style.width = pct + '%';
-            timelineMarker.style.left = pct + '%';
-            timelineMarkerYear.textContent = year;
+            const p = pct(year);
+            timelineFill.style.width = p + '%';
+            timelineThumb.style.left = p + '%';
+            timelineThumbLabel.textContent = year;
         }
 
         function updateTheme(year) {
-            const epoch = getEpochForYear(year);
-            // Alle theme-Klassen entfernen
+            const ep = getEpoch(year);
             body.className = body.className.replace(/theme-\S+/g, '');
-            body.classList.add('theme-' + epoch);
+            body.classList.add('theme-' + ep);
             body.dataset.year = year;
-            epochBadge.textContent = epochs[epoch].label;
+            const label = epochs[ep].label;
+            epochBadge.textContent = label;
+            headerEpoch.textContent = label;
         }
 
-        function updateFavorites(year) {
-            const epoch = getEpochForYear(year);
-            const epochData = favoritesData[epoch];
-            if (!epochData) return;
-
-            favoritesTitle.textContent = 'Zeitreise-Tipps: ' + epochData.label;
-            favoritesGrid.innerHTML = '';
-
-            epochData.sites.forEach(site => {
-                const card = document.createElement('a');
-                card.href = 'http://' + site.url;
-                card.className = 'favorite-card';
-                card.target = '_blank';
-                card.innerHTML = `
-                    <span class="favorite-name">${site.name}</span>
-                    <span class="favorite-desc">${site.desc}</span>
-                    <span class="favorite-url">${site.url}</span>
-                `;
-                favoritesGrid.appendChild(card);
-            });
+        function updateSites(year) {
+            const ep = getEpoch(year);
+            const data = favoritesData[ep];
+            if (!data) return;
+            sitesTitle.textContent = 'DESTINATIONS: ' + data.label;
+            sitesGrid.innerHTML = data.sites.map(s => `
+                <a href="http://${s.url}" class="site-card" target="_blank">
+                    <div class="site-name">${s.name}</div>
+                    <div class="site-desc">${s.desc}</div>
+                    <div class="site-url">&gt; ${s.url}</div>
+                </a>
+            `).join('');
         }
 
         function updateAll(year) {
             yearInput.value = year;
             yearValue.textContent = year;
-            infoYear.textContent = year;
+            btnYear.textContent = year;
             timelineSlider.value = year;
             updateTimeline(year);
             updateTheme(year);
-            updateFavorites(year);
+            updateSites(year);
         }
 
-        function changeYear(delta) {
-            let year = parseInt(yearInput.value) + delta;
-            year = Math.max(1996, Math.min(2025, year));
-            updateAll(year);
+        function changeYear(d) {
+            updateAll(Math.max(1996, Math.min(2025, parseInt(yearInput.value) + d)));
         }
 
-        function setYear(year) {
-            updateAll(year);
-        }
+        function setYear(y) { updateAll(y); }
 
-        // Timeline Slider
         timelineSlider.addEventListener('input', function() {
             updateAll(parseInt(this.value));
         });
 
         yearInput.addEventListener('input', function() {
-            const year = parseInt(this.value);
-            if (year >= 1996 && year <= 2025) {
-                updateAll(year);
-            }
+            const y = parseInt(this.value);
+            if (y >= 1996 && y <= 2025) updateAll(y);
         });
 
-        // Zeitreise-Animation beim Absenden
-        document.getElementById('btn-travel').addEventListener('click', function(e) {
-            const overlay = document.getElementById('travel-overlay');
-            const travelYear = document.getElementById('travel-year');
-
-            travelYear.textContent = yearInput.value;
+        // === Warp Animation ===
+        $('btn-connect').addEventListener('click', function(e) {
+            e.preventDefault();
+            const overlay = $('warp-overlay');
+            const from = {{ year }};
+            const to = parseInt(yearInput.value);
+            $('warp-from').textContent = from;
+            $('warp-to').textContent = to;
             overlay.classList.add('active');
 
-            // Animation laeuft, Form wird nach Delay abgeschickt
-            setTimeout(() => {
-                this.closest('form').submit();
-            }, 2000);
+            const statusEl = $('warp-status');
+            const barFill = $('warp-bar-fill');
+            const steps = [
+                [300,  'RESOLVING TEMPORAL COORDINATES...', 15],
+                [700,  'CONNECTING TO ARCHIVE NODE...', 30],
+                [1100, 'NEGOTIATING BAUD RATE... 56000', 50],
+                [1500, 'DOWNLOADING EPOCH DATA...', 70],
+                [1800, 'REBUILDING DOM STRUCTURES...', 85],
+                [2100, 'TEMPORAL LINK ESTABLISHED', 100],
+            ];
+            steps.forEach(([delay, msg, pct]) => {
+                setTimeout(() => {
+                    statusEl.textContent = msg;
+                    barFill.style.width = pct + '%';
+                }, delay);
+            });
 
-            e.preventDefault();
+            setTimeout(() => {
+                $('travel-form').submit();
+            }, 2500);
         });
 
-        // Initiale Timeline-Position
+        // === Boot Sequence ===
+        (function boot() {
+            if (sessionStorage.getItem('chronosurf-booted')) {
+                $('boot-screen').style.display = 'none';
+                $('main-wrapper').classList.add('visible');
+                return;
+            }
+
+            const lines = [
+                'CHRONOSURF BIOS v1.0',
+                'Copyright (c) 2024 Temporal Networks Inc.',
+                '',
+                'Detecting hardware...',
+                '  CPU: BCM2837 ARM Cortex-A53 @ 1.2GHz ... OK',
+                '  RAM: 1024MB ... OK',
+                '  ETH0: Link detected @ 100Mbps ... OK',
+                '  WLAN0: Access Point mode ... OK',
+                '  I2C: SSD1306 OLED @ 0x3C ... OK',
+                '  GPIO: Rotary Encoder ... OK',
+                '  GPIO: Passive Buzzer ... OK',
+                '',
+                'Initializing temporal subsystem...',
+                '  Wayback Machine API ... CONNECTED',
+                '  Archive nodes: 735 billion pages indexed',
+                '  Temporal range: 1996 - 2025',
+                '',
+                'Loading CHRONOSURF...',
+                '',
+                '> READY. SURF THE TIMELINE.',
+            ];
+
+            const bootText = $('boot-text');
+            const main = $('main-wrapper');
+            let i = 0;
+
+            function typeLine() {
+                if (i >= lines.length) {
+                    setTimeout(() => {
+                        $('boot-screen').classList.add('fade-out');
+                        main.classList.add('visible');
+                        sessionStorage.setItem('chronosurf-booted', '1');
+                    }, 600);
+                    return;
+                }
+                bootText.textContent += lines[i] + '\n';
+                bootText.scrollTop = bootText.scrollHeight;
+                i++;
+                setTimeout(typeLine, lines[i-1] === '' ? 100 : 60 + Math.random() * 40);
+            }
+            typeLine();
+        })();
+
+        // Init
         updateTimeline({{ year }});
     </script>
 </body>

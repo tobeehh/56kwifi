@@ -1,0 +1,15 @@
+[Unit]
+Description=Chronosurf Hardware Controller (Display + Encoder)
+After=network.target chronosurf-portal.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/chronosurf/hardware
+ExecStart=/usr/bin/python3 /opt/chronosurf/hardware/controller.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

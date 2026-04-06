@@ -1,0 +1,15 @@
+[Unit]
+Description=Chronosurf Wayback Proxy
+After=network.target chronosurf-portal.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/chronosurf/proxy
+ExecStart=/usr/bin/python3 /opt/chronosurf/proxy/wayback_proxy.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
