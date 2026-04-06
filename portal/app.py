@@ -174,7 +174,7 @@ def get_client_state(client_id=None):
     return {
         "year": client.get("year", data.get("global_year", DEFAULT_YEAR)),
         "active": client.get("active", False),
-        "speed": client.get("speed", "full"),
+        "speed": client.get("speed", data.get("global_speed", "full")),
         "client_id": client_id,
         "connected_since": client.get("connected_since", None),
     }

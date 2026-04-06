@@ -46,15 +46,18 @@ eras simultaneously.
 
 ## Hardware
 
-| Component           | Connection          |
-|---------------------|---------------------|
-| Rotary Encoder CLK  | GPIO 17             |
-| Rotary Encoder DT   | GPIO 18             |
-| Rotary Button       | GPIO 27             |
-| Passive Buzzer      | GPIO 22             |
-| LCD 20x4 SDA        | GPIO 2 (I2C SDA)    |
-| LCD 20x4 SCL        | GPIO 3 (I2C SCL)    |
-| LCD 20x4 I2C Addr   | 0x27 (or 0x3F)      |
+| Component              | Connection          |
+|------------------------|---------------------|
+| Encoder 1 CLK (Year)   | GPIO 17             |
+| Encoder 1 DT (Year)    | GPIO 18             |
+| Encoder 1 BTN (Year)   | GPIO 27             |
+| Encoder 2 CLK (Speed)  | GPIO 5              |
+| Encoder 2 DT (Speed)   | GPIO 6              |
+| Encoder 2 BTN (Speed)  | GPIO 13             |
+| Passive Buzzer          | GPIO 22             |
+| LCD 20x4 SDA           | GPIO 2 (I2C SDA)    |
+| LCD 20x4 SCL           | GPIO 3 (I2C SCL)    |
+| LCD 20x4 I2C Addr      | 0x27 (or 0x3F)      |
 
 ## Install
 

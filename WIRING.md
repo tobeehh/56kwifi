@@ -2,16 +2,16 @@
 
 ## Bauteile
 
-| # | Bauteil                        | Bezugsquelle       |
-|---|--------------------------------|--------------------|
-| 1 | Raspberry Pi 3 Model B         | -                  |
-| 2 | I2C LCD 20x4 (HD44780 + PCF8574 Backpack) | z.B. AZ-Delivery |
-| 3 | KY-040 Rotary Encoder           | z.B. AZ-Delivery  |
-| 4 | Passiver Buzzer (3.3V)          | z.B. AZ-Delivery  |
-| 5 | Ethernet-Kabel                  | -                  |
-| 6 | Micro-USB Netzteil 5V/2.5A     | -                  |
-| 7 | microSD-Karte (mind. 8GB)      | -                  |
-| 8 | Jumperkabel Female-Female       | -                  |
+| # | Bauteil                                    | Hinweis            |
+|---|--------------------------------------------|--------------------|
+| 1 | Raspberry Pi 3 Model B                     | -                  |
+| 2 | I2C LCD 20x4 (HD44780 + PCF8574 Backpack)  | z.B. AZ-Delivery   |
+| 3 | KY-040 Rotary Encoder mit Pushbutton (x2)  | 1x Jahr, 1x Speed  |
+| 4 | Passiver Buzzer (3.3V)                     | NICHT aktiv!       |
+| 5 | Ethernet-Kabel                              | Internet-Uplink    |
+| 6 | Micro-USB Netzteil 5V/2.5A                 | -                  |
+| 7 | microSD-Karte (mind. 8GB)                  | DietPi Image       |
+| 8 | Jumperkabel Female-Female                   | ca. 16 Stueck      |
 
 ## Pin-Belegung Raspberry Pi 3
 
@@ -19,41 +19,47 @@
                     Raspberry Pi 3 GPIO Header
                     (Ansicht von oben, USB-Ports rechts)
 
-                         3V3 [1]  [2]  5V
+                         3V3 [1]  [2]  5V           <- LCD VCC
                   SDA  GPIO2 [3]  [4]  5V
                   SCL  GPIO3 [5]  [6]  GND
                        GPIO4 [7]  [8]  GPIO14
                          GND [9]  [10] GPIO15
-             ENC_CLK GPIO17 [11] [12] GPIO18  ENC_DT
-             ENC_BTN GPIO27 [13] [14] GND
-                      GPIO22 [15] [16] GPIO23
+     YEAR_CLK  GPIO17 [11] [12] GPIO18  YEAR_DT
+     YEAR_BTN  GPIO27 [13] [14] GND
+       BUZZER  GPIO22 [15] [16] GPIO23
                          3V3 [17] [18] GPIO24
                       GPIO10 [19] [20] GND
                        GPIO9 [21] [22] GPIO25
                       GPIO11 [23] [24] GPIO8
                          GND [25] [26] GPIO7
                        GPIO0 [27] [28] GPIO1
-                       GPIO5 [29] [30] GND
-                       GPIO6 [31] [32] GPIO12
-                      GPIO13 [33] [34] GND
+    SPEED_CLK   GPIO5 [29] [30] GND
+    SPEED_DT    GPIO6 [31] [32] GPIO12
+    SPEED_BTN  GPIO13 [33] [34] GND
                       GPIO19 [35] [36] GPIO16
                       GPIO26 [37] [38] GPIO20
                          GND [39] [40] GPIO21
 
-    Belegte Pins:
+    Belegte Pins (12 Stueck):
+    [2]  5V         --> LCD VCC
     [3]  GPIO2/SDA  --> LCD SDA
     [5]  GPIO3/SCL  --> LCD SCL
-    [11] GPIO17     --> Encoder CLK
-    [12] GPIO18     --> Encoder DT
-    [13] GPIO27     --> Encoder SW (Button)
-    [15] GPIO22     --> Buzzer Signal
+    [9]  GND        --> LCD GND, Buzzer -, gemeinsam
+    [11] GPIO17     --> Encoder 1 CLK  (Jahr)
+    [12] GPIO18     --> Encoder 1 DT   (Jahr)
+    [13] GPIO27     --> Encoder 1 SW   (Jahr bestaetigen)
+    [15] GPIO22     --> Buzzer +
+    [17] 3V3        --> Encoder 1 VCC, Encoder 2 VCC
+    [29] GPIO5      --> Encoder 2 CLK  (Speed)
+    [31] GPIO6      --> Encoder 2 DT   (Speed)
+    [33] GPIO13     --> Encoder 2 SW   (Speed bestaetigen)
 ```
 
 ## Verkabelung
 
 ### 1. LCD 20x4 (I2C Backpack)
 
-Das LCD hat auf der Rueckseite ein kleines PCF8574 I2C-Board
+Das LCD hat auf der Rueckseite ein PCF8574 I2C-Board
 mit 4 Pins: GND, VCC, SDA, SCL.
 
 ```
@@ -75,30 +81,57 @@ mit 4 Pins: GND, VCC, SDA, SCL.
 **Hinweis:** Das LCD laeuft mit 5V, die I2C-Leitungen sind
 aber 3.3V-tolerant ueber den PCF8574. Kein Level-Shifter noetig.
 
-### 2. Rotary Encoder (KY-040)
+### 2. Encoder 1 - JAHR (KY-040 mit Pushbutton)
 
 ```
-    KY-040 Encoder                 Raspberry Pi
+    KY-040 Encoder 1               Raspberry Pi
     ┌─────────────┐
     │  ┌───────┐  │
-    │  │  Dreh- │  │
-    │  │  knopf │  │
+    │  │ YEAR  │  │
+    │  │ Knopf │  │
     │  └───────┘  │
     │             │
     │  GND ────────────────────── Pin 14 (GND)
     │   +  ────────────────────── Pin 17 (3V3)
-    │  SW  ────────────────────── Pin 13 (GPIO27)  Button
-    │  DT  ────────────────────── Pin 12 (GPIO18)  Richtung
-    │  CLK ────────────────────── Pin 11 (GPIO17)  Takt
+    │  SW  ────────────────────── Pin 13 (GPIO27)  Druecken = bestaetigen
+    │  DT  ────────────────────── Pin 12 (GPIO18)  Drehrichtung
+    │  CLK ────────────────────── Pin 11 (GPIO17)  Taktgeber
     │             │
     └─────────────┘
 
-    Drehung im Uhrzeigersinn  = Jahr +1
-    Drehung gegen Uhrzeiger   = Jahr -1
-    Druecken                  = Jahr bestaetigen
+    Drehen im Uhrzeigersinn  = Jahr +1
+    Drehen gegen Uhrzeiger   = Jahr -1
+    Druecken                 = Jahr als Default setzen
 ```
 
-### 3. Passiver Buzzer
+### 3. Encoder 2 - SPEED (KY-040 mit Pushbutton)
+
+```
+    KY-040 Encoder 2               Raspberry Pi
+    ┌─────────────┐
+    │  ┌───────┐  │
+    │  │ SPEED │  │
+    │  │ Knopf │  │
+    │  └───────┘  │
+    │             │
+    │  GND ────────────────────── Pin 34 (GND)
+    │   +  ────────────────────── Pin 17 (3V3)  <- geteilt mit Enc. 1
+    │  SW  ────────────────────── Pin 33 (GPIO13)  Druecken = bestaetigen
+    │  DT  ────────────────────── Pin 31 (GPIO6)   Drehrichtung
+    │  CLK ────────────────────── Pin 29 (GPIO5)   Taktgeber
+    │             │
+    └─────────────┘
+
+    Drehen im Uhrzeigersinn  = schneller (56k > ISDN > DSL > ... > FULL)
+    Drehen gegen Uhrzeiger   = langsamer
+    Druecken                 = Speed als Default setzen
+
+    Speed-Stufen:
+    56k Modem (56 kbit/s) -> ISDN (128k) -> DSL 384k ->
+    DSL 1000 -> DSL 6000 -> DSL 16000 -> FULL SPEED
+```
+
+### 4. Passiver Buzzer
 
 ```
     Passiver Buzzer                Raspberry Pi
@@ -129,49 +162,59 @@ aber 3.3V-tolerant ueber den PCF8574. Kein Level-Shifter noetig.
      │  Kabel   │      │  Pin 3  (SDA) ────────┤──┤─ LCD SDA
      └──────────┘      │  Pin 5  (SCL) ────────┤──┤─ LCD SCL
                         │                       │  │
-                        │  Pin 17 (3V3) ────────┤──┤─ Encoder +
-                        │  Pin 14 (GND) ────────┤──┤─ Encoder GND
-                        │  Pin 11 (GPIO17) ─────┤──┤─ Encoder CLK
-     ┌──────────┐      │  Pin 12 (GPIO18) ─────┤──┤─ Encoder DT
-     │  WiFi    │      │  Pin 13 (GPIO27) ─────┤──┤─ Encoder SW
-     │ Antenne  │      │                       │  │
-     │ (intern) │      │  Pin 15 (GPIO22) ─────┤──┤─ Buzzer +
-     └──────────┘      │  Pin 9  (GND) ────────┤──┘─ Buzzer -
+     ┌─────────────┐   │  Pin 17 (3V3) ────────┤──┤─ Enc.1 + / Enc.2 +
+     │  Encoder 1  │   │  Pin 14 (GND) ────────┤──┤─ Enc.1 GND
+     │   (YEAR)    │   │  Pin 11 (GPIO17) ─────┤──┤─ Enc.1 CLK
+     │  Drehen=    │   │  Pin 12 (GPIO18) ─────┤──┤─ Enc.1 DT
+     │  Jahr +/-   │   │  Pin 13 (GPIO27) ─────┤──┤─ Enc.1 SW
+     └─────────────┘   │                       │  │
+                        │  Pin 34 (GND) ────────┤──┤─ Enc.2 GND
+     ┌─────────────┐   │  Pin 29 (GPIO5) ──────┤──┤─ Enc.2 CLK
+     │  Encoder 2  │   │  Pin 31 (GPIO6) ──────┤──┤─ Enc.2 DT
+     │   (SPEED)   │   │  Pin 33 (GPIO13) ─────┤──┤─ Enc.2 SW
+     │  Drehen=    │   │                       │  │
+     │  56k..FULL  │   │  Pin 15 (GPIO22) ─────┤──┤─ Buzzer +
+     └─────────────┘   │  Pin 9  (GND) ────────┤──┘─ Buzzer -
                         │                       │
-                        │  microSD + USB Power  │
-                        └──────────────────────┘
+     ┌──────────┐      │  WiFi (intern)         │
+     │  Buzzer  │      │  microSD + USB Power   │
+     └──────────┘      └──────────────────────┘
 
-    Anzahl benoetigter Kabel: 11 (Female-Female Jumper)
-    GND kann geteilt werden (Pins 9, 14, 25, etc. sind alle GND)
+    Anzahl benoetigter Kabel: 16 (Female-Female Jumper)
+    3V3 und GND koennen geteilt werden
 ```
 
 ## Anschluss-Reihenfolge
 
 1. **Pi ausschalten** und Stromversorgung trennen
 2. LCD anschliessen (4 Kabel: 5V, GND, SDA, SCL)
-3. Encoder anschliessen (5 Kabel: 3V3, GND, CLK, DT, SW)
-4. Buzzer anschliessen (2 Kabel: GPIO22, GND)
-5. Ethernet-Kabel einstecken (Internet-Uplink)
-6. microSD mit DietPi einsetzen
-7. Stromversorgung anschliessen
+3. Encoder 1 (YEAR) anschliessen (5 Kabel: 3V3, GND, CLK, DT, SW)
+4. Encoder 2 (SPEED) anschliessen (5 Kabel: 3V3*, GND, CLK, DT, SW)
+   *3V3 mit Encoder 1 teilen
+5. Buzzer anschliessen (2 Kabel: GPIO22, GND)
+6. Ethernet-Kabel einstecken (Internet-Uplink)
+7. microSD mit DietPi einsetzen
+8. Stromversorgung anschliessen
+
+## LCD-Anzeige
+
+```
+1999 90s     *2 online   <- Jahr, Epoche, Surfer
+◄-----■············►     <- Zeitstrahl (Encoder 1)
+⊕------■···· 128k        <- Speed-Balken (Encoder 2)
+ F2>99@56k C1>01@isdn    <- Aktive Surfer
+```
 
 ## Testen
-
-Nach dem Booten:
 
 ```bash
 # I2C pruefen - LCD sollte auf 0x27 oder 0x3F erscheinen
 i2cdetect -y 1
 
-# Erwartete Ausgabe:
-#      0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
-# 20: -- -- -- -- -- -- -- 27 -- -- -- -- -- -- -- --
-
-# GPIO testen (Encoder)
-# Drehen/Druecken und auf der Konsole schauen:
+# Hardware-Controller starten (zeigt alle Encoder-Events)
 python3 /opt/chronosurf/hardware/controller.py
 
-# Buzzer testen
+# Buzzer separat testen
 python3 /opt/chronosurf/hardware/buzzer.py
 ```
 
@@ -183,6 +226,8 @@ python3 /opt/chronosurf/hardware/buzzer.py
 | LCD zeigt nur Bloecke | Kontrast zu hoch -> Poti zurueckdrehen |
 | `i2cdetect` zeigt nichts | I2C nicht aktiviert: `dietpi-config` -> Advanced -> I2C |
 | LCD auf 0x3F statt 0x27 | Ist ok, wird automatisch erkannt |
-| Encoder springt/zaehlt doppelt | Bouncetime in controller.py erhoehen |
+| Encoder springt/doppelt | Bouncetime in controller.py erhoehen |
 | Buzzer piept nur einmal | Aktiven statt passiven Buzzer erwischt |
 | Kein WiFi-AP sichtbar | `sudo systemctl status hostapd` pruefen |
+| Speed-Encoder tut nichts | Pins pruefen: GPIO5/6/13 (nicht 15/16/17!) |
+| Nur ein Encoder geht | GND und 3V3 beider Encoder pruefen |
