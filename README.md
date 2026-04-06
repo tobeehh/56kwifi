@@ -41,19 +41,20 @@ eras simultaneously.
 - **56k Modem Sound** via passive buzzer on connect/disconnect
 - **Per-Device State** via MAC address (each device = own year)
 - **Statistics Page** with global telemetry and personal logbook
-- **OLED Display** with rotary encoder for hardware control
+- **LCD 20x4 Display** with rotary encoder for hardware control
 - **Hostname Access** via `chronosurf.local` (mDNS/Avahi)
 
 ## Hardware
 
-| Component         | Connection     |
-|--------------------|---------------|
-| Rotary Encoder CLK | GPIO 17       |
-| Rotary Encoder DT  | GPIO 18       |
-| Rotary Button      | GPIO 27       |
-| Passive Buzzer     | GPIO 22       |
-| SSD1306 SDA        | GPIO 2 (I2C)  |
-| SSD1306 SCL        | GPIO 3 (I2C)  |
+| Component           | Connection          |
+|---------------------|---------------------|
+| Rotary Encoder CLK  | GPIO 17             |
+| Rotary Encoder DT   | GPIO 18             |
+| Rotary Button       | GPIO 27             |
+| Passive Buzzer      | GPIO 22             |
+| LCD 20x4 SDA        | GPIO 2 (I2C SDA)    |
+| LCD 20x4 SCL        | GPIO 3 (I2C SCL)    |
+| LCD 20x4 I2C Addr   | 0x27 (or 0x3F)      |
 
 ## Install
 
@@ -115,7 +116,7 @@ chronosurf/
 ├── proxy/
 │   └── wayback_proxy.py    # HTTP proxy -> Wayback Machine (per-MAC)
 ├── hardware/
-│   ├── controller.py       # Rotary encoder + OLED + button
+│   ├── controller.py       # Rotary encoder + LCD 20x4 + button
 │   └── buzzer.py           # 56k modem dial-up sound synthesis
 └── systemd/                # 3 service files
 ```

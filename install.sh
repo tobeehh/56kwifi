@@ -48,13 +48,9 @@ apt-get install -y -qq \
     python3 python3-dev \
     hostapd dnsmasq iptables \
     avahi-daemon \
-    i2c-tools \
-    libopenjp2-7
+    i2c-tools
 
-# libtiff: Bookworm uses libtiff6, Bullseye uses libtiff5
-apt-get install -y -qq libtiff6 2>/dev/null || apt-get install -y -qq libtiff5 2>/dev/null || true
-
-# python3-smbus: may be named differently
+# python3-smbus: needed for I2C LCD, may be named differently
 apt-get install -y -qq python3-smbus 2>/dev/null || apt-get install -y -qq python3-smbus2 2>/dev/null || true
 
 # pip: DietPi strips it by default

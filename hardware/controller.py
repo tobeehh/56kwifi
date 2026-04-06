@@ -2,12 +2,12 @@
 """
 CHRONOSURF - Hardware Controller
 
-Steuert den Rotary Encoder, SSD1306 Display und Button
+Steuert den Rotary Encoder, I2C LCD 20x4 und Button
 zur lokalen Jahresauswahl am Geraet.
 
 Hardware:
   - Rotary Encoder KY-040: CLK=GPIO17, DT=GPIO18, Button=GPIO27
-  - SSD1306 OLED Display: I2C (SDA=GPIO2, SCL=GPIO3)
+  - I2C LCD 20x4 (HD44780 + PCF8574): I2C Bus 1, Adresse 0x27
   - Passiver Buzzer: GPIO22 (56k Modem-Sound)
 """
 
@@ -20,14 +20,11 @@ from pathlib import Path
 
 try:
     import RPi.GPIO as GPIO
-    from luma.core.interface.serial import i2c
-    from luma.oled.device import ssd1306
-    from luma.core.render import canvas
-    from PIL import ImageFont, ImageDraw
+    from RPLCD.i2c import CharLCD
     HW_AVAILABLE = True
 except ImportError:
     HW_AVAILABLE = False
-    print("WARNUNG: Hardware-Bibliotheken nicht verfuegbar (Simulation)")
+    print("WARNING: Hardware libraries not available (simulation mode)")
 
 import sys
 from pathlib import Path as _Path
@@ -48,15 +45,35 @@ PIN_CLK = 17    # Rotary Encoder CLK
 PIN_DT = 18     # Rotary Encoder DT
 PIN_BTN = 27    # Rotary Encoder Button
 
-# Display
-DISPLAY_WIDTH = 128
-DISPLAY_HEIGHT = 64
+# LCD: I2C address (0x27 fuer PCF8574, 0x3F fuer PCF8574A)
+LCD_I2C_ADDR = 0x27
+LCD_I2C_PORT = 1
+LCD_COLS = 20
+LCD_ROWS = 4
+
+# Custom characters for the LCD
+# Block/bar character for the timeline
+CHAR_BLOCK = (0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F)
+CHAR_HALF  = (0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10)
+CHAR_ARROW_R = (0x00, 0x04, 0x06, 0x1F, 0x1F, 0x06, 0x04, 0x00)
+CHAR_ARROW_L = (0x00, 0x04, 0x0C, 0x1F, 0x1F, 0x0C, 0x04, 0x00)
+CHAR_CONN   = (0x00, 0x0E, 0x11, 0x04, 0x0A, 0x00, 0x04, 0x00)  # WiFi icon
 
 # Zustand
 current_year = DEFAULT_YEAR
 is_active = False
 display_lock = threading.Lock()
 last_clk_state = None
+lcd = None
+
+
+def get_epoch_name(year):
+    """Returns short epoch name for a year."""
+    if year <= 1999: return "90s"
+    if year <= 2004: return "Y2K"
+    if year <= 2009: return "WEB2.0"
+    if year <= 2015: return "SOCIAL"
+    return "MODERN"
 
 
 def get_state():
@@ -94,10 +111,7 @@ def setup_gpio():
 
     last_clk_state = GPIO.input(PIN_CLK)
 
-    # Interrupt fuer Rotary Encoder
     GPIO.add_event_detect(PIN_CLK, GPIO.BOTH, callback=rotary_callback, bouncetime=2)
-
-    # Interrupt fuer Button (fallende Flanke = gedrueckt)
     GPIO.add_event_detect(PIN_BTN, GPIO.FALLING, callback=button_callback, bouncetime=300)
 
 
@@ -110,10 +124,8 @@ def rotary_callback(channel):
 
     if clk_state != last_clk_state:
         if dt_state != clk_state:
-            # Im Uhrzeigersinn -> Jahr erhoehen
             current_year = min(MAX_YEAR, current_year + 1)
         else:
-            # Gegen Uhrzeigersinn -> Jahr verringern
             current_year = max(MIN_YEAR, current_year - 1)
 
         last_clk_state = clk_state
@@ -125,7 +137,6 @@ def button_callback(channel):
     """Callback fuer Button-Druck: Aktiviert/deaktiviert die Zeitreise."""
     global is_active
 
-    # Entprellen
     time.sleep(0.05)
     if GPIO.input(PIN_BTN) != GPIO.LOW:
         return
@@ -133,9 +144,8 @@ def button_callback(channel):
     is_active = not is_active
     set_state(current_year, is_active)
     update_display()
-    print(f"{'AKTIVIERT' if is_active else 'DEAKTIVIERT'}: Jahr {current_year}")
+    print(f"{'CONNECTED' if is_active else 'DISCONNECTED'}: Year {current_year}")
 
-    # Modem-Sound abspielen
     if is_active:
         play_async(play_dialup_sound)
     else:
@@ -143,61 +153,145 @@ def button_callback(channel):
 
 
 def setup_display():
-    """Initialisiert das SSD1306 OLED Display."""
-    serial = i2c(port=1, address=0x3C)
-    device = ssd1306(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
-    device.contrast(200)
-    return device
+    """Initialisiert das I2C LCD 20x4."""
+    try:
+        display = CharLCD(
+            i2c_expander='PCF8574',
+            address=LCD_I2C_ADDR,
+            port=LCD_I2C_PORT,
+            cols=LCD_COLS,
+            rows=LCD_ROWS,
+            dotsize=8,
+            auto_linebreaks=False,
+        )
+    except Exception:
+        # Fallback: versuche alternative Adresse (PCF8574A)
+        display = CharLCD(
+            i2c_expander='PCF8574',
+            address=0x3F,
+            port=LCD_I2C_PORT,
+            cols=LCD_COLS,
+            rows=LCD_ROWS,
+            dotsize=8,
+            auto_linebreaks=False,
+        )
+
+    # Custom Characters laden
+    display.create_char(0, CHAR_BLOCK)
+    display.create_char(1, CHAR_HALF)
+    display.create_char(2, CHAR_ARROW_R)
+    display.create_char(3, CHAR_ARROW_L)
+    display.create_char(4, CHAR_CONN)
+
+    display.backlight_enabled = True
+    display.clear()
+    return display
+
+
+def _timeline_bar(year):
+    """Erzeugt einen 20-Zeichen Zeitstrahl-Balken."""
+    # Position berechnen (0-18, da wir < und > brauchen)
+    pos = int(((year - MIN_YEAR) / (MAX_YEAR - MIN_YEAR)) * 18)
+    bar = "\x03"  # Left arrow
+    for i in range(18):
+        if i == pos:
+            bar += "\x00"  # Filled block = current position
+        elif i < pos:
+            bar += "-"
+        else:
+            bar += "\xA5"  # Middle dot
+    bar += "\x02"  # Right arrow
+    return bar
 
 
 def update_display():
-    """Aktualisiert die Anzeige auf dem OLED Display."""
+    """Aktualisiert die LCD-Anzeige."""
     if not HW_AVAILABLE:
-        print(f"\r[Display] Jahr: {current_year}  "
-              f"Status: {'AKTIV' if is_active else 'BEREIT'}  ", end="", flush=True)
+        epoch = get_epoch_name(current_year)
+        bar = f"[{'=' * ((current_year - MIN_YEAR) * 18 // (MAX_YEAR - MIN_YEAR))}>"
+        bar = bar.ljust(20, '-') + ']'
+        print(f"\r[LCD]  CHRONOSURF          ", end="")
+        print(f"\n       <<< {current_year} >>> {epoch:>6s}", end="")
+        print(f"\n       {bar}", end="")
+        if is_active:
+            print(f"\n       * CONNECTED         ", end="", flush=True)
+        else:
+            print(f"\n         Press to dial     ", end="", flush=True)
+        print("\033[4A", end="")  # Move cursor back up
         return
 
     with display_lock:
         try:
-            with canvas(device) as draw:
-                draw_interface(draw)
+            epoch = get_epoch_name(current_year)
+            timeline = _timeline_bar(current_year)
+
+            # Zeile 1: Header
+            line1 = "  CHRONOSURF".ljust(LCD_COLS)
+
+            # Zeile 2: Jahr + Epoche
+            line2 = f"  <<< {current_year} >>> {epoch:>6s}".ljust(LCD_COLS)
+
+            # Zeile 3: Timeline-Balken
+            line3 = timeline
+
+            # Zeile 4: Status
+            if is_active:
+                line4 = " \x04 CONNECTED".ljust(LCD_COLS)
+            else:
+                line4 = "   Press to dial".ljust(LCD_COLS)
+
+            lcd.home()
+            lcd.write_string(line1)
+            lcd.cursor_pos = (1, 0)
+            lcd.write_string(line2)
+            lcd.cursor_pos = (2, 0)
+            lcd.write_string(line3)
+            lcd.cursor_pos = (3, 0)
+            lcd.write_string(line4)
+
         except Exception as e:
-            print(f"Display-Fehler: {e}")
+            print(f"LCD error: {e}")
 
 
-def draw_interface(draw):
-    """Zeichnet die Benutzeroberflaeche auf das Display."""
-    # Titel
-    draw.text((15, 0), "CHRONOSURF", fill="white")
-    draw.line([(0, 12), (127, 12)], fill="white")
+def show_boot_screen():
+    """Zeigt den Boot-Screen auf dem LCD."""
+    if not HW_AVAILABLE:
+        print("[LCD] CHRONOSURF BOOT")
+        return
 
-    # Jahr gross in der Mitte
-    year_str = str(current_year)
-    # Einfache grosse Darstellung
-    draw.text((25, 18), year_str, fill="white")
-
-    # Pfeile links/rechts
-    draw.text((5, 22), "<", fill="white")
-    draw.text((115, 22), ">", fill="white")
-
-    # Trennlinie
-    draw.line([(0, 42), (127, 42)], fill="white")
-
-    # Status
-    if is_active:
-        draw.rectangle([(0, 46), (127, 63)], fill="white")
-        draw.text((20, 48), "CONNECTED", fill="black")
-    else:
-        draw.rectangle([(0, 46), (127, 63)], outline="white")
-        draw.text((25, 48), "PRESS TO DIAL", fill="white")
+    lcd.clear()
+    lcd.cursor_pos = (0, 0)
+    lcd.write_string("   CHRONOSURF v1.0  ")
+    lcd.cursor_pos = (1, 0)
+    lcd.write_string(" Surf the Timeline  ")
+    lcd.cursor_pos = (2, 0)
+    lcd.write_string("                    ")
+    lcd.cursor_pos = (3, 0)
+    lcd.write_string("  Initializing...   ")
 
 
-def draw_boot_screen(draw):
-    """Zeichnet den Boot-Screen."""
-    draw.text((10, 5), "CHRONOSURF", fill="white")
-    draw.text((10, 20), "Surf the Timeline", fill="white")
-    draw.line([(0, 35), (127, 35)], fill="white")
-    draw.text((10, 42), "Starte...", fill="white")
+def show_connecting_animation():
+    """Zeigt eine Verbindungsanimation."""
+    if not HW_AVAILABLE or lcd is None:
+        return
+
+    with display_lock:
+        lcd.clear()
+        lcd.cursor_pos = (0, 0)
+        lcd.write_string("   CHRONOSURF       ")
+        lcd.cursor_pos = (1, 0)
+        lcd.write_string(f"  Dialing {current_year}...   ")
+        lcd.cursor_pos = (2, 0)
+
+        # Animated progress bar
+        for i in range(LCD_COLS):
+            lcd.cursor_pos = (2, i)
+            lcd.write_string("\x00")
+            time.sleep(0.08)
+
+        lcd.cursor_pos = (3, 0)
+        lcd.write_string("    CONNECTED!      ")
+        time.sleep(0.5)
 
 
 def poll_state_changes():
@@ -216,7 +310,6 @@ def poll_state_changes():
                     get_state()
                     if current_year != old_year or is_active != old_active:
                         update_display()
-                        # Sound bei Aktivierung/Deaktivierung durch Web-Portal
                         if is_active != old_active:
                             if is_active:
                                 play_async(play_dialup_sound)
@@ -232,51 +325,49 @@ def cleanup(signum=None, frame=None):
     buzzer_cleanup()
     if HW_AVAILABLE:
         GPIO.cleanup()
-        device.hide()
-    print("\nHardware-Controller beendet.")
+        if lcd is not None:
+            lcd.clear()
+            lcd.cursor_pos = (0, 0)
+            lcd.write_string("   CHRONOSURF       ")
+            lcd.cursor_pos = (1, 0)
+            lcd.write_string("    Shutdown...     ")
+            lcd.backlight_enabled = False
+    print("\nHardware controller stopped.")
     sys.exit(0)
 
 
 def main():
-    global device
+    global lcd
 
     print("CHRONOSURF - Hardware Controller")
 
-    # Signale abfangen
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    # Zustand laden
     get_state()
 
     if HW_AVAILABLE:
-        # Hardware initialisieren
-        print("Initialisiere Hardware...")
-        device = setup_display()
+        print("Initializing hardware...")
+        lcd = setup_display()
 
-        # Boot-Screen anzeigen
-        with canvas(device) as draw:
-            draw_boot_screen(draw)
+        show_boot_screen()
         time.sleep(2)
 
         buzzer_setup()
         setup_gpio()
-        print("GPIO, Display und Buzzer initialisiert.")
+        print("GPIO, LCD and buzzer initialized.")
     else:
-        print("Simulation-Modus (keine Hardware erkannt)")
-        device = None
+        print("Simulation mode (no hardware detected)")
+        lcd = None
 
-    # Initiale Anzeige
     update_display()
 
-    # State-Polling in separatem Thread starten
     poll_thread = threading.Thread(target=poll_state_changes, daemon=True)
     poll_thread.start()
 
-    print(f"Controller laeuft. Jahr: {current_year}, Aktiv: {is_active}")
-    print("Drehe am Encoder um das Jahr zu aendern, druecke zum Aktivieren.")
+    print(f"Running. Year: {current_year}, Active: {is_active}")
+    print("Rotate encoder to select year, press to connect.")
 
-    # Hauptschleife
     try:
         while True:
             time.sleep(0.1)
