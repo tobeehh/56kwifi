@@ -17,6 +17,7 @@ vergangener Jahre ueber das Wayback Machine (Internet Archive) zu erleben.
 - Raspberry Pi 3
 - SSD1306 OLED Display (I2C, 128x64)
 - Rotary Encoder (KY-040) mit integriertem Button
+- Passiver Buzzer (56k Modem-Sound)
 - Ethernet-Kabel fuer Internetzugang
 
 ### Pin-Belegung (BCM)
@@ -26,6 +27,7 @@ vergangener Jahre ueber das Wayback Machine (Internet Archive) zu erleben.
 | Rotary CLK        | GPIO 17 |
 | Rotary DT         | GPIO 18 |
 | Rotary Button     | GPIO 27 |
+| Buzzer (passiv)   | GPIO 22 |
 | SSD1306 SDA       | GPIO 2 (I2C) |
 | SSD1306 SCL       | GPIO 3 (I2C) |
 

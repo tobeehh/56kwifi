@@ -8,6 +8,7 @@ zur lokalen Jahresauswahl am Geraet.
 Hardware:
   - Rotary Encoder KY-040: CLK=GPIO17, DT=GPIO18, Button=GPIO27
   - SSD1306 OLED Display: I2C (SDA=GPIO2, SCL=GPIO3)
+  - Passiver Buzzer: GPIO22 (56k Modem-Sound)
 """
 
 import json
@@ -27,6 +28,14 @@ try:
 except ImportError:
     HW_AVAILABLE = False
     print("WARNUNG: Hardware-Bibliotheken nicht verfuegbar (Simulation)")
+
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).parent))
+from buzzer import (
+    setup as buzzer_setup, play_dialup_sound, play_disconnect_sound,
+    play_click_sound, play_async, cleanup as buzzer_cleanup
+)
 
 # Konfiguration
 STATE_FILE = Path("/tmp/zeitmaschine_state.json")
@@ -108,6 +117,7 @@ def rotary_callback(channel):
             current_year = max(MIN_YEAR, current_year - 1)
 
         last_clk_state = clk_state
+        play_click_sound()
         update_display()
 
 
@@ -124,6 +134,12 @@ def button_callback(channel):
     set_state(current_year, is_active)
     update_display()
     print(f"{'AKTIVIERT' if is_active else 'DEAKTIVIERT'}: Jahr {current_year}")
+
+    # Modem-Sound abspielen
+    if is_active:
+        play_async(play_dialup_sound)
+    else:
+        play_async(play_disconnect_sound)
 
 
 def setup_display():
@@ -200,6 +216,12 @@ def poll_state_changes():
                     get_state()
                     if current_year != old_year or is_active != old_active:
                         update_display()
+                        # Sound bei Aktivierung/Deaktivierung durch Web-Portal
+                        if is_active != old_active:
+                            if is_active:
+                                play_async(play_dialup_sound)
+                            else:
+                                play_async(play_disconnect_sound)
         except Exception:
             pass
         time.sleep(1)
@@ -207,6 +229,7 @@ def poll_state_changes():
 
 def cleanup(signum=None, frame=None):
     """Aufraeumen beim Beenden."""
+    buzzer_cleanup()
     if HW_AVAILABLE:
         GPIO.cleanup()
         device.hide()
@@ -236,8 +259,9 @@ def main():
             draw_boot_screen(draw)
         time.sleep(2)
 
+        buzzer_setup()
         setup_gpio()
-        print("GPIO und Display initialisiert.")
+        print("GPIO, Display und Buzzer initialisiert.")
     else:
         print("Simulation-Modus (keine Hardware erkannt)")
         device = None
