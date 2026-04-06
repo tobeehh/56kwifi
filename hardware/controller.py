@@ -7,6 +7,7 @@ Zwei Rotary Encoder mit integriertem Pushbutton:
   - Encoder 2 (SPEED): CLK=GPIO5,  DT=GPIO6,  BTN=GPIO13
   - I2C LCD 20x4 (HD44780 + PCF8574): I2C Bus 1, Adresse 0x27
   - Passiver Buzzer: GPIO22
+  - RGB LED (common cathode): R=GPIO23, G=GPIO24, B=GPIO25
 
 Encoder 1 stellt das Jahr ein (1996-2025), Button bestaetigt.
 Encoder 2 stellt die Geschwindigkeit ein (56k..full), Button bestaetigt.
@@ -33,6 +34,12 @@ sys.path.insert(0, str(_Path(__file__).parent))
 from buzzer import (
     setup as buzzer_setup, play_dialup_sound, play_disconnect_sound,
     play_click_sound, play_async, cleanup as buzzer_cleanup
+)
+from rgb_led import (
+    setup as led_setup, set_epoch as led_set_epoch,
+    pulse_epoch as led_pulse_epoch, fade_to_epoch as led_fade_epoch,
+    flash_connect as led_flash_connect, flash_disconnect as led_flash_disconnect,
+    boot_animation as led_boot, off as led_off, cleanup as led_cleanup
 )
 
 # Konfiguration
@@ -202,6 +209,7 @@ def year_rotary_cb(channel):
             current_year = max(MIN_YEAR, current_year - 1)
         last_year_clk = clk
         play_click_sound()
+        led_fade_epoch(get_epoch_name(current_year), duration=0.2)
         update_display()
 
 
@@ -505,14 +513,23 @@ def poll_state_changes():
 
                     for mac in new_connections:
                         year = mac_year_map.get(mac, current_year)
+                        led_flash_connect()
                         play_async(play_dialup_sound)
                         show_surfer_connected(mac[-5:], year)
 
                     for mac in lost_connections:
+                        led_flash_disconnect()
                         play_async(play_disconnect_sound)
                         show_surfer_disconnected(mac[-5:], current_year)
 
                     prev_active_macs = now_active_macs
+
+                    # LED-Status aktualisieren
+                    epoch = get_epoch_name(current_year)
+                    if active_count > 0:
+                        led_pulse_epoch(epoch, speed=1.5)
+                    else:
+                        led_set_epoch(epoch)
 
                     if not new_connections and not lost_connections:
                         if current_year != old_year or active_count != len(old_active_macs):
@@ -526,6 +543,7 @@ def poll_state_changes():
 # --- Lifecycle ---
 
 def cleanup(signum=None, frame=None):
+    led_cleanup()
     buzzer_cleanup()
     if HW_AVAILABLE:
         GPIO.cleanup()
@@ -553,10 +571,13 @@ def main():
     if HW_AVAILABLE:
         print("Initializing hardware...")
         lcd = setup_display()
+        led_setup()
+        led_boot()
         show_boot_screen()
         time.sleep(2)
         buzzer_setup()
         setup_gpio()
+        led_set_epoch(get_epoch_name(current_year))
         print("GPIO, LCD and buzzer initialized.")
     else:
         print("Simulation mode (no hardware detected)")
