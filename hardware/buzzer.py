@@ -39,6 +39,10 @@ def setup():
     global _pwm
     if not HW_AVAILABLE:
         return
+    try:
+        GPIO.setmode(GPIO.BCM)
+    except ValueError:
+        pass  # Already set by controller
     GPIO.setup(PIN_BUZZER, GPIO.OUT)
     _pwm = GPIO.PWM(PIN_BUZZER, 440)
 
