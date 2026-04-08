@@ -43,8 +43,8 @@ DEFAULT_YEAR = 1999
 
 # --- GPIO Pins (BCM) ---
 # Encoder 1: Jahr
-PIN_YEAR_CLK = 17
-PIN_YEAR_DT  = 18
+PIN_YEAR_CLK = 18
+PIN_YEAR_DT  = 17
 PIN_YEAR_BTN = 27
 
 # Encoder 2: Speed
