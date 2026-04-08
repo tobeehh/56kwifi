@@ -45,7 +45,7 @@ apt-get update -qq
 
 # Core packages (work on both DietPi and Raspberry Pi OS)
 apt-get install -y -qq \
-    python3 python3-dev \
+    python3 python3-dev gcc \
     hostapd dnsmasq iptables \
     avahi-daemon \
     i2c-tools
