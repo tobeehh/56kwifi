@@ -246,6 +246,7 @@ def _update_proxy():
         for c in data.get("clients", {}).values()
     )
 
+    # Alte Proxy-Regel entfernen (falls vorhanden)
     try:
         subprocess.run(
             ["iptables", "-t", "nat", "-D", "PREROUTING",
@@ -257,8 +258,10 @@ def _update_proxy():
         pass
 
     if any_active:
+        # Proxy-Regel NACH der Portal-Ausnahme einfuegen (Position 2)
+        # Position 1 = Portal-IP -> :8080 (darf nicht ueberschrieben werden)
         subprocess.run(
-            ["iptables", "-t", "nat", "-I", "PREROUTING", "1",
+            ["iptables", "-t", "nat", "-I", "PREROUTING", "2",
              "-i", "wlan0", "-p", "tcp", "--dport", "80",
              "-j", "DNAT", "--to-destination", f"{ap_ip}:{proxy_port}"],
             capture_output=True
