@@ -1,0 +1,31 @@
+# CHRONOSURF - DietPi Konfiguration
+#
+# Diese Werte in /boot/dietpi.txt aendern/hinzufuegen
+# BEVOR du den Pi zum ersten Mal bootest:
+
+# Automatische Installation ohne Nachfragen
+AUTO_SETUP_AUTOMATED=1
+
+# Standard-Passwort (aendern wenn gewuenscht)
+AUTO_SETUP_GLOBAL_PASSWORD=chronosurf
+
+# Ethernet aktivieren (Internet-Uplink)
+AUTO_SETUP_NET_ETHERNET_ENABLED=1
+
+# WiFi aktivieren (wird als AP konfiguriert)
+AUTO_SETUP_NET_WIFI_ENABLED=1
+
+# Serielle Konsole deaktivieren (brauchen wir nicht)
+CONFIG_SERIAL_CONSOLE_ENABLE=0
+
+# Locale
+AUTO_SETUP_LOCALE=de_DE.UTF-8
+
+# Timezone
+AUTO_SETUP_TIMEZONE=Europe/Berlin
+
+# Hostname (wird vom install.sh ueberschrieben, aber schadet nicht)
+AUTO_SETUP_NET_HOSTNAME=chronosurf
+
+# I2C aktivieren
+CONFIG_I2C_STATE=1
