@@ -180,83 +180,64 @@ def setup_gpio():
     last_year_clk = GPIO.input(PIN_YEAR_CLK)
     last_speed_clk = GPIO.input(PIN_SPEED_CLK)
 
-    # Interrupts - try/except fuer den Fall dass Encoder nicht angeschlossen sind
-    for pin, cb, edge, bounce, name in [
-        (PIN_YEAR_CLK, year_rotary_cb, GPIO.BOTH, 2, "Year encoder"),
-        (PIN_YEAR_BTN, year_button_cb, GPIO.FALLING, 300, "Year button"),
-        (PIN_SPEED_CLK, speed_rotary_cb, GPIO.BOTH, 2, "Speed encoder"),
-        (PIN_SPEED_BTN, speed_button_cb, GPIO.FALLING, 300, "Speed button"),
-    ]:
-        try:
-            GPIO.add_event_detect(pin, edge, callback=cb, bouncetime=bounce)
-        except RuntimeError:
-            print(f"  WARN: {name} (GPIO{pin}) - edge detection failed, skipping")
 
+def poll_encoders():
+    """Polling-Thread fuer Encoder und Buttons (ersetzt edge detection)."""
+    global current_year, current_speed_idx, last_year_clk, last_speed_clk
 
-# --- Encoder 1: Year ---
+    last_year_btn = 1
+    last_speed_btn = 1
 
-def year_rotary_cb(channel):
-    global current_year, last_year_clk
+    while True:
+        # --- Year Encoder ---
+        clk = GPIO.input(PIN_YEAR_CLK)
+        if clk != last_year_clk:
+            dt = GPIO.input(PIN_YEAR_DT)
+            if dt != clk:
+                current_year = min(MAX_YEAR, current_year + 1)
+            else:
+                current_year = max(MIN_YEAR, current_year - 1)
+            last_year_clk = clk
+            play_click_sound()
+            update_display()
 
-    clk = GPIO.input(PIN_YEAR_CLK)
-    dt = GPIO.input(PIN_YEAR_DT)
+        # --- Year Button ---
+        btn = GPIO.input(PIN_YEAR_BTN)
+        if btn == 0 and last_year_btn == 1:
+            write_global_state()
+            print(f"YEAR SET: {current_year}")
+            if HW_AVAILABLE and lcd is not None:
+                with display_lock:
+                    _lcd_write_line(3, f" \x04 YEAR SET: {current_year}")
+                time.sleep(1)
+                update_display()
+        last_year_btn = btn
 
-    if clk != last_year_clk:
-        if dt != clk:
-            current_year = min(MAX_YEAR, current_year + 1)
-        else:
-            current_year = max(MIN_YEAR, current_year - 1)
-        last_year_clk = clk
-        play_click_sound()
-        update_display()
+        # --- Speed Encoder ---
+        clk = GPIO.input(PIN_SPEED_CLK)
+        if clk != last_speed_clk:
+            dt = GPIO.input(PIN_SPEED_DT)
+            if dt != clk:
+                current_speed_idx = min(len(SPEED_LIST) - 1, current_speed_idx + 1)
+            else:
+                current_speed_idx = max(0, current_speed_idx - 1)
+            last_speed_clk = clk
+            play_click_sound()
+            update_display()
 
+        # --- Speed Button ---
+        btn = GPIO.input(PIN_SPEED_BTN)
+        if btn == 0 and last_speed_btn == 1:
+            write_global_state()
+            print(f"SPEED SET: {get_speed_label()}")
+            if HW_AVAILABLE and lcd is not None:
+                with display_lock:
+                    _lcd_write_line(3, f" \x04 SPEED: {get_speed_label()}")
+                time.sleep(1)
+                update_display()
+        last_speed_btn = btn
 
-def year_button_cb(channel):
-    time.sleep(0.05)
-    if GPIO.input(PIN_YEAR_BTN) != GPIO.LOW:
-        return
-
-    write_global_state()
-    print(f"YEAR SET: {current_year}")
-
-    if HW_AVAILABLE and lcd is not None:
-        with display_lock:
-            _lcd_write_line(3, f" \x04 YEAR SET: {current_year}")
-        time.sleep(1)
-    update_display()
-
-
-# --- Encoder 2: Speed ---
-
-def speed_rotary_cb(channel):
-    global current_speed_idx, last_speed_clk
-
-    clk = GPIO.input(PIN_SPEED_CLK)
-    dt = GPIO.input(PIN_SPEED_DT)
-
-    if clk != last_speed_clk:
-        if dt != clk:
-            current_speed_idx = min(len(SPEED_LIST) - 1, current_speed_idx + 1)
-        else:
-            current_speed_idx = max(0, current_speed_idx - 1)
-        last_speed_clk = clk
-        play_click_sound()
-        update_display()
-
-
-def speed_button_cb(channel):
-    time.sleep(0.05)
-    if GPIO.input(PIN_SPEED_BTN) != GPIO.LOW:
-        return
-
-    write_global_state()
-    print(f"SPEED SET: {get_speed_label()}")
-
-    if HW_AVAILABLE and lcd is not None:
-        with display_lock:
-            _lcd_write_line(3, f" \x04 SPEED: {get_speed_label()}")
-        time.sleep(1)
-    update_display()
+        time.sleep(0.001)  # 1ms polling
 
 
 # --- Display ---
@@ -570,8 +551,15 @@ def main():
 
     update_display()
 
-    poll_thread = threading.Thread(target=poll_state_changes, daemon=True)
-    poll_thread.start()
+    # State-Polling (Web-Portal Sync)
+    state_thread = threading.Thread(target=poll_state_changes, daemon=True)
+    state_thread.start()
+
+    # Encoder-Polling (statt edge detection - kompatibel mit allen Kernels)
+    if HW_AVAILABLE:
+        encoder_thread = threading.Thread(target=poll_encoders, daemon=True)
+        encoder_thread.start()
+        print("Encoder polling started.")
 
     print(f"Running. Year: {current_year}, Speed: {get_speed_label()}, Surfers: {active_count}")
 
