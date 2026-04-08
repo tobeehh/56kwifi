@@ -204,7 +204,7 @@
                 </div>
                 <div class="sites-grid" id="sites-grid">
                     {% for site in favorites %}
-                    <a href="http://{{ site.url }}" class="site-card" target="_blank">
+                    <a href="https://web.archive.org/web/{{ year }}/http://{{ site.url }}" class="site-card" target="_blank">
                         <div class="site-name">{{ site.name }}</div>
                         <div class="site-desc">{{ site.desc }}</div>
                         <div class="site-url">&gt; {{ site.url }}</div>
@@ -310,7 +310,7 @@
             if (!data) return;
             sitesTitle.textContent = 'DESTINATIONS: ' + data.label;
             sitesGrid.innerHTML = data.sites.map(s => `
-                <a href="http://${s.url}" class="site-card" target="_blank">
+                <a href="https://web.archive.org/web/${yearInput.value}/http://${s.url}" class="site-card" target="_blank">
                     <div class="site-name">${s.name}</div>
                     <div class="site-desc">${s.desc}</div>
                     <div class="site-url">&gt; ${s.url}</div>
