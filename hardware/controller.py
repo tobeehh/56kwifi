@@ -555,8 +555,8 @@ def main():
         lcd = setup_display()
         show_boot_screen()
         time.sleep(2)
-        buzzer_setup()
         setup_gpio()
+        buzzer_setup()
         print("GPIO, LCD and buzzer initialized.")
     else:
         print("Simulation mode (no hardware detected)")
