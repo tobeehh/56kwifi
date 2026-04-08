@@ -329,30 +329,52 @@ def track_page_visit(client_ip, domain):
     track_stat(mac, "domain", domain)
 
 
+def _portal_template_vars():
+    """Template-Variablen fuer die Hauptseite."""
+    state = get_client_state()
+    year = state["year"]
+    epoch_key, epoch = _get_epoch_for_year(year)
+    return {
+        "year": year,
+        "active": state["active"],
+        "speed": state["speed"],
+        "auto_speed": state["auto_speed"],
+        "client_id": state["client_id"],
+        "epoch_key": epoch_key,
+        "epoch_label": epoch["label"],
+        "favorites": epoch["sites"],
+        "all_epochs": {k: v["label"] for k, v in FAVORITES.items()},
+        "favorites_data": FAVORITES,
+        "speed_presets": SPEED_PRESETS,
+        "epoch_speeds": EPOCH_SPEEDS,
+    }
+
+
 # --- Captive Portal Detection Endpoints ---
 
 @app.route("/generate_204")
 @app.route("/gen_204")
 def android_captive():
-    return redirect("http://chronosurf.local/", code=302)
+    return redirect("http://192.168.4.1:8080/", code=302)
 
 
 @app.route("/hotspot-detect.html")
 @app.route("/library/test/success.html")
 def apple_captive():
-    return redirect("http://chronosurf.local/", code=302)
+    """Apple erwartet NICHT 'Success' im Body -> dann zeigt iOS das Portal-Sheet."""
+    return render_template("index.html", **_portal_template_vars())
 
 
 @app.route("/connecttest.txt")
 @app.route("/ncsi.txt")
 def windows_captive():
-    return redirect("http://chronosurf.local/", code=302)
+    return redirect("http://192.168.4.1:8080/", code=302)
 
 
 @app.route("/canonical.html")
 @app.route("/success.txt")
 def firefox_captive():
-    return redirect("http://chronosurf.local/", code=302)
+    return redirect("http://192.168.4.1:8080/", code=302)
 
 
 # --- Haupt-Routen ---
@@ -360,27 +382,7 @@ def firefox_captive():
 @app.route("/")
 def index():
     """Hauptseite mit Jahresauswahl."""
-    state = get_client_state()
-    year = state["year"]
-    epoch_key, epoch = _get_epoch_for_year(year)
-    favorites = epoch["sites"]
-    all_epochs = {k: v["label"] for k, v in FAVORITES.items()}
-
-    return render_template(
-        "index.html",
-        year=year,
-        active=state["active"],
-        speed=state["speed"],
-        auto_speed=state["auto_speed"],
-        client_id=state["client_id"],
-        epoch_key=epoch_key,
-        epoch_label=epoch["label"],
-        favorites=favorites,
-        all_epochs=all_epochs,
-        favorites_data=FAVORITES,
-        speed_presets=SPEED_PRESETS,
-        epoch_speeds=EPOCH_SPEEDS,
-    )
+    return render_template("index.html", **_portal_template_vars())
 
 
 @app.route("/set", methods=["GET", "POST"])
@@ -517,7 +519,7 @@ def api_year_for_ip(ip):
 def catch_all(path):
     host = request.host.split(":")[0]
     if host != "chronosurf.local" and host != "192.168.4.1":
-        return redirect("http://chronosurf.local/", code=302)
+        return redirect("http://192.168.4.1:8080/", code=302)
     return redirect("/")
 
 
