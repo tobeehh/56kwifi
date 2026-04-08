@@ -56,6 +56,17 @@
                 </div>
             </section>
 
+            <!-- URL Search Bar -->
+            <section class="search-section">
+                <div class="search-bar">
+                    <span class="search-prefix">https://web.archive.org/web/<span id="search-year">{{ year }}</span>/</span>
+                    <input type="text" id="search-input" class="search-input"
+                           placeholder="enter url... e.g. google.com"
+                           autocapitalize="none" autocorrect="off" spellcheck="false">
+                    <button type="button" class="search-btn" onclick="goToUrl()">GO</button>
+                </div>
+            </section>
+
             <!-- Timeline -->
             <section class="timeline-section">
                 <div class="timeline-bar">
@@ -260,6 +271,20 @@
             `).join('');
         }
 
+        function goToUrl() {
+            let url = $('search-input').value.trim();
+            if (!url) return;
+            // Protokoll entfernen falls eingegeben
+            url = url.replace(/^https?:\/\//, '');
+            const year = yearInput.value;
+            window.open('https://web.archive.org/web/' + year + '/http://' + url, '_blank');
+        }
+
+        // Enter-Taste in der Suchleiste
+        $('search-input')?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') goToUrl();
+        });
+
         function updateAll(year) {
             yearInput.value = year;
             yearValue.textContent = year;
@@ -268,6 +293,8 @@
             updateTimeline(year);
             updateTheme(year);
             updateSites(year);
+            const sy = $('search-year');
+            if (sy) sy.textContent = year;
         }
 
         function changeYear(d) {
