@@ -15,15 +15,6 @@ from pathlib import Path
 from flask import (
     Flask, render_template, request, redirect, jsonify, make_response
 )
-import sys as _sys
-from pathlib import Path as _Path
-_sys.path.insert(0, str(_Path(__file__).parent))
-from throttle import (
-    SPEED_PRESETS, EPOCH_SPEEDS,
-    set_speed_for_ip, remove_speed_for_ip,
-    get_speed_label, get_recommended_speed,
-    init_tc,
-)
 
 app = Flask(__name__)
 
@@ -174,14 +165,12 @@ def get_client_state(client_id=None):
     return {
         "year": client.get("year", data.get("global_year", DEFAULT_YEAR)),
         "active": client.get("active", False),
-        "speed": client.get("speed", data.get("global_speed", "full")),
-        "auto_speed": client.get("auto_speed", True),
         "client_id": client_id,
         "connected_since": client.get("connected_since", None),
     }
 
 
-def set_client_state(year, active=True, client_id=None, speed=None, auto_speed=None):
+def set_client_state(year, active=True, client_id=None):
     """Setzt den State fuer einen Client."""
     if client_id is None:
         client_id = _get_client_id()
@@ -192,26 +181,11 @@ def set_client_state(year, active=True, client_id=None, speed=None, auto_speed=N
 
     now = time.time()
     existing = data["clients"].get(client_id, {})
-
-    # Auto-Speed: bestehenden Wert beibehalten oder Default (an)
-    if auto_speed is None:
-        auto_speed = existing.get("auto_speed", True)
-
-    # Speed: wenn auto_speed aktiv und kein expliziter Speed, Epoche matchen
-    if speed is None:
-        if auto_speed:
-            epoch_key = _get_epoch_for_year(int(year))[0]
-            speed = get_recommended_speed(epoch_key)
-        else:
-            speed = existing.get("speed", "full")
-
     client_ip = _get_client_ip()
 
     data["clients"][client_id] = {
         "year": int(year),
         "active": active,
-        "speed": speed,
-        "auto_speed": auto_speed,
         "ip": client_ip,
         "connected_since": existing.get("connected_since", now) if active else None,
         "last_seen": now,
@@ -219,12 +193,6 @@ def set_client_state(year, active=True, client_id=None, speed=None, auto_speed=N
     data["global_year"] = int(year)
 
     _save_all_states(data)
-
-    # Traffic Shaping anwenden
-    if active:
-        set_speed_for_ip(client_ip, speed)
-    else:
-        remove_speed_for_ip(client_ip)
 
     # Statistik tracken
     if active and not existing.get("active", False):
@@ -337,16 +305,12 @@ def _portal_template_vars():
     return {
         "year": year,
         "active": state["active"],
-        "speed": state["speed"],
-        "auto_speed": state["auto_speed"],
         "client_id": state["client_id"],
         "epoch_key": epoch_key,
         "epoch_label": epoch["label"],
         "favorites": epoch["sites"],
         "all_epochs": {k: v["label"] for k, v in FAVORITES.items()},
         "favorites_data": FAVORITES,
-        "speed_presets": SPEED_PRESETS,
-        "epoch_speeds": EPOCH_SPEEDS,
     }
 
 
@@ -390,12 +354,8 @@ def set_year():
     """Jahr und Speed setzen (per Form oder Query-Parameter)."""
     if request.method == "POST":
         year = request.form.get("year", DEFAULT_YEAR)
-        speed = request.form.get("speed", None)
-        auto_speed_val = request.form.get("auto_speed", None)
     else:
         year = request.args.get("year", DEFAULT_YEAR)
-        speed = request.args.get("speed", None)
-        auto_speed_val = request.args.get("auto_speed", None)
 
     try:
         year = int(year)
@@ -403,46 +363,10 @@ def set_year():
     except (ValueError, TypeError):
         year = DEFAULT_YEAR
 
-    # Speed validieren
-    if speed and speed not in SPEED_PRESETS:
-        speed = None
-
-    # Auto-Speed: Checkbox sendet "on" wenn checked, fehlt wenn unchecked
-    auto_speed = None
-    if auto_speed_val is not None:
-        auto_speed = auto_speed_val in ("on", "true", "1")
-
-    # Wenn auto_speed aktiv, speed nicht manuell setzen (wird automatisch gewaehlt)
-    if auto_speed:
-        speed = None
-
-    state = set_client_state(year, active=True, speed=speed, auto_speed=auto_speed)
+    state = set_client_state(year, active=True)
     if request.method == "POST":
         return redirect("/")
     return jsonify(state)
-
-
-@app.route("/set_speed", methods=["POST"])
-def set_speed():
-    """Speed aendern ohne Jahr zu aendern (fuer laufende Verbindung)."""
-    speed = request.form.get("speed", "full")
-    if speed not in SPEED_PRESETS:
-        speed = "full"
-
-    state = get_client_state()
-    # Manueller Speed-Wechsel deaktiviert auto_speed
-    set_client_state(state["year"], active=state["active"], speed=speed, auto_speed=False)
-    return redirect("/")
-
-
-@app.route("/set_auto_speed", methods=["POST"])
-def set_auto_speed():
-    """Auto-Speed Toggle."""
-    enabled = request.form.get("auto_speed") in ("on", "true", "1")
-    state = get_client_state()
-    speed = None  # Wird automatisch gewaehlt wenn auto_speed=True
-    set_client_state(state["year"], active=state["active"], speed=speed, auto_speed=enabled)
-    return redirect("/")
 
 
 @app.route("/disconnect", methods=["POST"])
@@ -529,7 +453,4 @@ if __name__ == "__main__":
     if not STATS_FILE.exists():
         _save_all_stats({"clients": {}, "total_connections": 0, "total_pages": 0})
 
-    # Traffic Shaping initialisieren
-    init_tc()
-
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    app.run(host="0.0.0.0", port=8080, debug=False, threaded=True)

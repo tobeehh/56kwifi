@@ -3,8 +3,7 @@
 CHRONOSURF - Hardware Controller
 
 Zwei Rotary Encoder mit integriertem Pushbutton:
-  - Encoder 1 (YEAR):  CLK=GPIO17, DT=GPIO18, BTN=GPIO27
-  - Encoder 2 (SPEED): CLK=GPIO5,  DT=GPIO6,  BTN=GPIO13
+  - Rotary Encoder (YEAR): CLK=GPIO18, DT=GPIO17, BTN=GPIO27
   - I2C LCD 20x4 (HD44780 + PCF8574): I2C Bus 1, Adresse 0x27
   - Passiver Buzzer: GPIO22
 
@@ -47,11 +46,6 @@ PIN_YEAR_CLK = 18
 PIN_YEAR_DT  = 17
 PIN_YEAR_BTN = 27
 
-# Encoder 2: Speed
-PIN_SPEED_CLK = 5
-PIN_SPEED_DT  = 6
-PIN_SPEED_BTN = 13
-
 # Buzzer
 PIN_BUZZER = 22
 
@@ -60,17 +54,6 @@ LCD_I2C_ADDR = 0x27
 LCD_I2C_PORT = 1
 LCD_COLS = 20
 LCD_ROWS = 4
-
-# Speed-Presets (gleiche Reihenfolge wie in throttle.py)
-SPEED_LIST = [
-    ("56k",    "56k Modem",    56),
-    ("isdn",   "ISDN 128k",   128),
-    ("dsl384", "DSL 384k",    384),
-    ("dsl1",   "DSL 1000",    1000),
-    ("dsl6",   "DSL 6000",    6000),
-    ("dsl16",  "DSL 16000",   16000),
-    ("full",   "FULL SPEED",  0),
-]
 
 # Custom characters
 CHAR_BLOCK   = (0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F)
@@ -81,7 +64,6 @@ CHAR_GAUGE   = (0x00, 0x0E, 0x15, 0x17, 0x11, 0x0E, 0x00, 0x00)  # Speed gauge
 
 # Zustand
 current_year = DEFAULT_YEAR
-current_speed_idx = 0  # Index in SPEED_LIST
 active_count = 0
 active_clients = []
 display_lock = threading.Lock()
@@ -98,33 +80,14 @@ def get_epoch_name(year):
     return "MODERN"
 
 
-def get_speed_key():
-    return SPEED_LIST[current_speed_idx][0]
-
-
-def get_speed_label():
-    return SPEED_LIST[current_speed_idx][1]
-
-
-def get_speed_kbit():
-    return SPEED_LIST[current_speed_idx][2]
-
-
 # --- State I/O ---
 
 def read_state():
     """Liest das per-MAC State-File."""
-    global current_year, current_speed_idx, active_count, active_clients
+    global current_year, active_count, active_clients
     try:
         data = json.loads(STATE_FILE.read_text())
         current_year = data.get("global_year", DEFAULT_YEAR)
-
-        # Global speed aus State lesen
-        global_speed = data.get("global_speed", "56k")
-        for i, (key, _, _) in enumerate(SPEED_LIST):
-            if key == global_speed:
-                current_speed_idx = i
-                break
 
         clients = data.get("clients", {})
         active_clients = []
@@ -133,7 +96,6 @@ def read_state():
                 active_clients.append({
                     "year": info.get("year", DEFAULT_YEAR),
                     "id": mac[-5:],
-                    "speed": info.get("speed", "full"),
                 })
         active_count = len(active_clients)
 
@@ -155,45 +117,36 @@ def write_global_state():
         data = {"clients": {}, "global_year": DEFAULT_YEAR}
 
     data["global_year"] = current_year
-    data["global_speed"] = get_speed_key()
     STATE_FILE.write_text(json.dumps(data, indent=2))
 
 
 # --- GPIO Setup ---
 
 def setup_gpio():
-    global last_year_clk, last_speed_clk
+    global last_year_clk
 
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
 
-    # Encoder 1: Year
     GPIO.setup(PIN_YEAR_CLK, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(PIN_YEAR_DT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(PIN_YEAR_BTN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    # Encoder 2: Speed
-    GPIO.setup(PIN_SPEED_CLK, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(PIN_SPEED_DT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(PIN_SPEED_BTN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
     last_year_clk = GPIO.input(PIN_YEAR_CLK)
-    last_speed_clk = GPIO.input(PIN_SPEED_CLK)
 
 
 def poll_encoders():
-    """Polling-Thread fuer Encoder und Buttons (ersetzt edge detection)."""
-    global current_year, current_speed_idx, last_year_clk, last_speed_clk
+    """Polling-Thread fuer Encoder und Button (ersetzt edge detection)."""
+    global current_year, last_year_clk
 
     last_year_btn = 1
-    last_speed_btn = 1
 
     while True:
         # --- Year Encoder ---
         clk = GPIO.input(PIN_YEAR_CLK)
         if clk != last_year_clk:
             last_year_clk = clk
-            if clk == 0:  # Nur auf fallende Flanke reagieren
+            if clk == 0:
                 dt = GPIO.input(PIN_YEAR_DT)
                 if dt != clk:
                     current_year = min(MAX_YEAR, current_year + 1)
@@ -214,32 +167,7 @@ def poll_encoders():
                 update_display()
         last_year_btn = btn
 
-        # --- Speed Encoder ---
-        clk = GPIO.input(PIN_SPEED_CLK)
-        if clk != last_speed_clk:
-            last_speed_clk = clk
-            if clk == 0:  # Nur auf fallende Flanke reagieren
-                dt = GPIO.input(PIN_SPEED_DT)
-                if dt != clk:
-                    current_speed_idx = min(len(SPEED_LIST) - 1, current_speed_idx + 1)
-                else:
-                    current_speed_idx = max(0, current_speed_idx - 1)
-                play_click_sound()
-                update_display()
-
-        # --- Speed Button ---
-        btn = GPIO.input(PIN_SPEED_BTN)
-        if btn == 0 and last_speed_btn == 1:
-            write_global_state()
-            print(f"SPEED SET: {get_speed_label()}")
-            if HW_AVAILABLE and lcd is not None:
-                with display_lock:
-                    _lcd_write_line(3, f" \x04 SPEED: {get_speed_label()}")
-                time.sleep(1)
-                update_display()
-        last_speed_btn = btn
-
-        time.sleep(0.001)  # 1ms polling
+        time.sleep(0.001)
 
 
 # --- Display ---
@@ -278,25 +206,11 @@ def _timeline_bar(year):
     return bar
 
 
-def _speed_bar():
-    """Erzeugt einen Speed-Balken mit Marker."""
-    pos = current_speed_idx
-    total = len(SPEED_LIST) - 1
-    # 12 Zeichen fuer den Balken
-    bar_len = 12
-    marker_pos = int((pos / total) * (bar_len - 1)) if total > 0 else 0
-    bar = ""
-    for i in range(bar_len):
-        bar += "\x00" if i == marker_pos else ("-" if i < marker_pos else "\xA5")
-    return bar
-
-
 def update_display():
     if not HW_AVAILABLE:
         epoch = get_epoch_name(current_year)
-        spd = get_speed_label()
-        print(f"\r[LCD] CHRONOSURF  \x04{active_count}", end="")
-        print(f"\n      {current_year} {epoch:<6s}  {spd:>8s}", end="")
+        print(f"\r[LCD] CHRONOSURF  \x03{active_count}", end="")
+        print(f"\n      {current_year} {epoch}", end="")
         bar_pos = (current_year - MIN_YEAR) * 18 // (MAX_YEAR - MIN_YEAR)
         bar = f"[{'=' * bar_pos}>{'-' * (18 - bar_pos)}]"
         print(f"\n      {bar}", end="")
@@ -304,44 +218,33 @@ def update_display():
             surfers = " ".join(f"{c['id'][-2:]}>{str(c['year'])[2:]}" for c in active_clients[:3])
             print(f"\n      {surfers}", end="", flush=True)
         else:
-            print(f"\n      Waiting for surfers", end="", flush=True)
+            print(f"\n      Surf the Timeline", end="", flush=True)
         print("\033[4A", end="")
         return
 
     with display_lock:
         try:
             epoch = get_epoch_name(current_year)
-            spd_label = get_speed_label()
-            kbit = get_speed_kbit()
             timeline = _timeline_bar(current_year)
 
-            # Zeile 1: Jahr + Epoche + Surfer-Count
+            # Zeile 1: Header + Surfer-Count
             if active_count > 0:
-                line1 = f"{current_year} {epoch:<6s} \x03{active_count} online"
+                line1 = f"CHRONOSURF \x03{active_count} online"
             else:
-                line1 = f"{current_year} {epoch:<6s}  CHRNOSURF"
+                line1 = "CHRONOSURF"
 
-            # Zeile 2: Timeline
-            line2 = timeline
+            # Zeile 2: Jahr + Epoche
+            line2 = f"  <<< {current_year} >>> {epoch:>6s}"
 
-            # Zeile 3: Speed-Anzeige
-            spd_bar = _speed_bar()
-            if kbit > 0:
-                kbit_str = f"{kbit}k" if kbit < 1000 else f"{kbit // 1000}M"
-                line3 = f"\x04{spd_bar} {kbit_str:>4s}"
-            else:
-                line3 = f"\x04{spd_bar}  MAX"
+            # Zeile 3: Timeline
+            line3 = timeline
 
-            # Zeile 4: Aktive Surfer oder Label
+            # Zeile 4: Aktive Surfer oder Tagline
             if active_count > 0:
                 parts = []
                 for c in active_clients[:3]:
                     yr_short = str(c["year"])[2:]
-                    spd = c.get("speed", "full")
-                    if spd == "full":
-                        parts.append(f"{c['id'][-2:]}>{yr_short}")
-                    else:
-                        parts.append(f"{c['id'][-2:]}>{yr_short}@{spd}")
+                    parts.append(f"{c['id'][-2:]}>{yr_short}")
                 line4 = " ".join(parts)
             else:
                 line4 = " Surf the Timeline"
@@ -531,8 +434,7 @@ def main():
     global lcd
 
     print("CHRONOSURF - Hardware Controller")
-    print("  Encoder 1 (YEAR):  GPIO17/18/27")
-    print("  Encoder 2 (SPEED): GPIO5/6/13")
+    print("  Encoder (YEAR): GPIO18/17/27")
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
@@ -563,7 +465,7 @@ def main():
         encoder_thread.start()
         print("Encoder polling started.")
 
-    print(f"Running. Year: {current_year}, Speed: {get_speed_label()}, Surfers: {active_count}")
+    print(f"Running. Year: {current_year}, Surfers: {active_count}")
 
     try:
         while True:
