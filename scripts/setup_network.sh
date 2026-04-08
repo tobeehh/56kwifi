@@ -275,8 +275,9 @@ iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -d ${AP_IP} -p tcp --dport 80 -
 
 # Restlicher HTTP -> Captive Portal (Port 8080) - wird spaeter vom Proxy ueberschrieben
 iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -p tcp --dport 80 -j DNAT --to-destination ${AP_IP}:8080
-# HTTPS -> Captive Portal (fuer Detection-Endpoints)
-iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -p tcp --dport 443 -j DNAT --to-destination ${AP_IP}:8080
+# HTTPS: NICHT umleiten! Sonst funktioniert kein HTTPS fuer Clients.
+# Captive Portal Detection funktioniert auch ohne HTTPS-Redirect,
+# da alle gaengigen OS zuerst HTTP-Endpunkte pruefen.
 
 # iptables persistent machen
 mkdir -p /etc/iptables
