@@ -216,7 +216,7 @@ class WaybackProxyHandler(BaseHTTPRequestHandler):
 
     def _redirect_to_portal(self):
         self.send_response(302)
-        self.send_header("Location", "http://chronosurf.local/")
+        self.send_header("Location", "http://192.168.4.1:8080/")
         self.end_headers()
 
     def _strip_wayback_toolbar(self, content, content_type):
@@ -331,7 +331,7 @@ a:hover {{ text-decoration: underline; }}
     It may not have existed yet, or was not crawled.
 </div>
 <div class="actions">
-    <a href="http://chronosurf.local/" class="btn">BACK TO CHRONOSURF</a>
+    <a href="http://192.168.4.1:8080/" class="btn">BACK TO CHRONOSURF</a>
     <a href="http://chronosurf.local/set?year={year}">Change year</a>
 </div>
 <div class="alts">
@@ -361,7 +361,7 @@ a {{ color: #00e5ff; }}
 <body><div>
 <h1>FEHLER {code}</h1>
 <p>{message}</p>
-<p><a href="http://chronosurf.local/">Zurueck zum Portal</a></p>
+<p><a href="http://192.168.4.1:8080/">Zurueck zum Portal</a></p>
 </div></body></html>"""
 
         content = body.encode("utf-8")
