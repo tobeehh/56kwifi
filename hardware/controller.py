@@ -180,11 +180,17 @@ def setup_gpio():
     last_year_clk = GPIO.input(PIN_YEAR_CLK)
     last_speed_clk = GPIO.input(PIN_SPEED_CLK)
 
-    # Interrupts
-    GPIO.add_event_detect(PIN_YEAR_CLK, GPIO.BOTH, callback=year_rotary_cb, bouncetime=2)
-    GPIO.add_event_detect(PIN_YEAR_BTN, GPIO.FALLING, callback=year_button_cb, bouncetime=300)
-    GPIO.add_event_detect(PIN_SPEED_CLK, GPIO.BOTH, callback=speed_rotary_cb, bouncetime=2)
-    GPIO.add_event_detect(PIN_SPEED_BTN, GPIO.FALLING, callback=speed_button_cb, bouncetime=300)
+    # Interrupts - try/except fuer den Fall dass Encoder nicht angeschlossen sind
+    for pin, cb, edge, bounce, name in [
+        (PIN_YEAR_CLK, year_rotary_cb, GPIO.BOTH, 2, "Year encoder"),
+        (PIN_YEAR_BTN, year_button_cb, GPIO.FALLING, 300, "Year button"),
+        (PIN_SPEED_CLK, speed_rotary_cb, GPIO.BOTH, 2, "Speed encoder"),
+        (PIN_SPEED_BTN, speed_button_cb, GPIO.FALLING, 300, "Speed button"),
+    ]:
+        try:
+            GPIO.add_event_detect(pin, edge, callback=cb, bouncetime=bounce)
+        except RuntimeError:
+            print(f"  WARN: {name} (GPIO{pin}) - edge detection failed, skipping")
 
 
 # --- Encoder 1: Year ---
