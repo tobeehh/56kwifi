@@ -67,9 +67,48 @@ systemctl enable avahi-daemon 2>/dev/null || true
 systemctl restart avahi-daemon 2>/dev/null || true
 
 # ============================================
-# [3/7] wpa_supplicant deaktivieren fuer wlan0
+# [3/7] WiFi-Chip aktivieren + wpa_supplicant deaktivieren
 # ============================================
-echo "  [3/7] Disabling wpa_supplicant for ${AP_INTERFACE}..."
+echo "  [3/7] Enabling WiFi chip, disabling wpa_supplicant..."
+
+# DietPi deaktiviert WiFi per dtoverlay - das muss raus
+BOOT_CONFIG=""
+if [ -f /boot/firmware/config.txt ]; then
+    BOOT_CONFIG="/boot/firmware/config.txt"
+elif [ -f /boot/config.txt ]; then
+    BOOT_CONFIG="/boot/config.txt"
+fi
+
+if [ -n "$BOOT_CONFIG" ]; then
+    sed -i '/dtoverlay=disable-wifi/d' "$BOOT_CONFIG"
+    echo "  -> Removed disable-wifi overlay from $BOOT_CONFIG"
+fi
+
+# DietPi dietpi.txt: WiFi aktivieren
+if [ -f /boot/dietpi.txt ]; then
+    sed -i 's/AUTO_SETUP_NET_WIFI_ENABLED=0/AUTO_SETUP_NET_WIFI_ENABLED=1/' /boot/dietpi.txt
+fi
+
+# brcmfmac Treiber beim Boot laden (Pi 3B+ braucht das explizit)
+if ! grep -q "^brcmfmac" /etc/modules 2>/dev/null; then
+    echo "brcmfmac" >> /etc/modules
+fi
+modprobe brcmfmac 2>/dev/null || true
+
+# Warten bis wlan0 erscheint
+echo -n "  Waiting for wlan0"
+for i in $(seq 1 10); do
+    if ip link show wlan0 &>/dev/null; then
+        echo " OK"
+        break
+    fi
+    echo -n "."
+    sleep 1
+done
+
+if ! ip link show wlan0 &>/dev/null; then
+    echo " WARN: wlan0 not found (may need reboot)"
+fi
 
 # wpa_supplicant darf wlan0 nicht anfassen, sonst kaempft es mit hostapd
 # DietPi und Pi OS nutzen beide systemd wpa_supplicant
