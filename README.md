@@ -55,10 +55,6 @@ eras simultaneously.
 | Encoder 2 DT (Speed)   | GPIO 6              |
 | Encoder 2 BTN (Speed)  | GPIO 13             |
 | Passive Buzzer          | GPIO 22             |
-| RGB LED Red             | GPIO 23             |
-| RGB LED Green           | GPIO 24             |
-| RGB LED Blue            | GPIO 25             |
-| RGB LED GND             | GND                 |
 | LCD 20x4 SDA           | GPIO 2 (I2C SDA)    |
 | LCD 20x4 SCL           | GPIO 3 (I2C SCL)    |
 | LCD 20x4 I2C Addr      | 0x27 (or 0x3F)      |
