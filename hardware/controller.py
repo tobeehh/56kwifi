@@ -192,14 +192,15 @@ def poll_encoders():
         # --- Year Encoder ---
         clk = GPIO.input(PIN_YEAR_CLK)
         if clk != last_year_clk:
-            dt = GPIO.input(PIN_YEAR_DT)
-            if dt != clk:
-                current_year = min(MAX_YEAR, current_year + 1)
-            else:
-                current_year = max(MIN_YEAR, current_year - 1)
             last_year_clk = clk
-            play_click_sound()
-            update_display()
+            if clk == 0:  # Nur auf fallende Flanke reagieren
+                dt = GPIO.input(PIN_YEAR_DT)
+                if dt != clk:
+                    current_year = min(MAX_YEAR, current_year + 1)
+                else:
+                    current_year = max(MIN_YEAR, current_year - 1)
+                play_click_sound()
+                update_display()
 
         # --- Year Button ---
         btn = GPIO.input(PIN_YEAR_BTN)
@@ -216,14 +217,15 @@ def poll_encoders():
         # --- Speed Encoder ---
         clk = GPIO.input(PIN_SPEED_CLK)
         if clk != last_speed_clk:
-            dt = GPIO.input(PIN_SPEED_DT)
-            if dt != clk:
-                current_speed_idx = min(len(SPEED_LIST) - 1, current_speed_idx + 1)
-            else:
-                current_speed_idx = max(0, current_speed_idx - 1)
             last_speed_clk = clk
-            play_click_sound()
-            update_display()
+            if clk == 0:  # Nur auf fallende Flanke reagieren
+                dt = GPIO.input(PIN_SPEED_DT)
+                if dt != clk:
+                    current_speed_idx = min(len(SPEED_LIST) - 1, current_speed_idx + 1)
+                else:
+                    current_speed_idx = max(0, current_speed_idx - 1)
+                play_click_sound()
+                update_display()
 
         # --- Speed Button ---
         btn = GPIO.input(PIN_SPEED_BTN)
