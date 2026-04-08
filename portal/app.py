@@ -361,8 +361,8 @@ def android_captive():
 @app.route("/hotspot-detect.html")
 @app.route("/library/test/success.html")
 def apple_captive():
-    """Apple erwartet NICHT 'Success' im Body -> dann zeigt iOS das Portal-Sheet."""
-    return render_template("index.html", **_portal_template_vars())
+    """Apple: simple Seite ohne externe Ressourcen fuer das Captive Portal Sheet."""
+    return render_template("captive.html")
 
 
 @app.route("/connecttest.txt")
