@@ -212,7 +212,7 @@ cat > /etc/dnsmasq.conf << DNSMASQ
 
 # Only listen on AP interface
 interface=${AP_INTERFACE}
-bind-interfaces
+bind-dynamic
 
 # DHCP range
 dhcp-range=${DHCP_RANGE_START},${DHCP_RANGE_END},255.255.255.0,24h
@@ -270,7 +270,10 @@ iptables -t nat -A POSTROUTING -o ${INET_INTERFACE} -j MASQUERADE
 iptables -A FORWARD -i ${INET_INTERFACE} -o ${AP_INTERFACE} -m state --state RELATED,ESTABLISHED -j ACCEPT
 iptables -A FORWARD -i ${AP_INTERFACE} -o ${INET_INTERFACE} -j ACCEPT
 
-# HTTP -> Captive Portal (Port 8080)
+# Traffic an die Portal-IP selbst -> direkt zum Portal (NICHT durch Proxy!)
+iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -d ${AP_IP} -p tcp --dport 80 -j DNAT --to-destination ${AP_IP}:8080
+
+# Restlicher HTTP -> Captive Portal (Port 8080) - wird spaeter vom Proxy ueberschrieben
 iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -p tcp --dport 80 -j DNAT --to-destination ${AP_IP}:8080
 # HTTPS -> Captive Portal (fuer Detection-Endpoints)
 iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -p tcp --dport 443 -j DNAT --to-destination ${AP_IP}:8080
