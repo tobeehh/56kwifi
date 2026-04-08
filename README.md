@@ -64,20 +64,20 @@ eras simultaneously.
 ### Quick Setup (empfohlen) - Zero Touch
 
 1. [DietPi Image](https://dietpi.com/) fuer Raspberry Pi 3 auf microSD flashen
-2. SD-Karte am PC mounten und auf der Boot-Partition:
-   - `dietpi.txt` oeffnen, diese Werte setzen:
-     ```
-     AUTO_SETUP_AUTOMATED=1
-     AUTO_SETUP_GLOBAL_PASSWORD=chronosurf
-     AUTO_SETUP_NET_ETHERNET_ENABLED=1
-     AUTO_SETUP_NET_WIFI_ENABLED=1
-     CONFIG_I2C_STATE=1
-     ```
-   - `firstboot/Automation_Custom_Script.sh` aus diesem Repo
-     nach `/boot/Automation_Custom_Script.sh` kopieren
-3. SD einsetzen, Ethernet anschliessen, Strom an
-4. Warten (~5-10 Min) - DietPi installiert alles automatisch
-5. Pi startet neu - CHRONOSURF laeuft!
+2. Dieses Repo klonen und SD-Karte vorbereiten:
+   ```bash
+   git clone https://github.com/tobeehh/56kwifi.git
+   cd 56kwifi
+   bash firstboot/prepare_sd.sh /Volumes/boot
+   ```
+   (Linux: `/mnt/boot` statt `/Volumes/boot`)
+
+   Das Script patcht `dietpi.txt` und kopiert das Boot-Script automatisch.
+3. SD auswerfen, in den Pi einsetzen, Ethernet anschliessen, Strom an
+4. Warten (~5-10 Min) - alles installiert sich automatisch
+5. WLAN **"CHRONOSURF"** erscheint - fertig!
+
+SSH: `ssh root@chronosurf.local` (Passwort: `chronosurf`)
 
 ### Manuell (DietPi)
 

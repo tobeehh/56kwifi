@@ -1,31 +1,68 @@
 # CHRONOSURF - DietPi Konfiguration
 #
-# Diese Werte in /boot/dietpi.txt aendern/hinzufuegen
-# BEVOR du den Pi zum ersten Mal bootest:
+# WICHTIG: Die Werte muessen in der BESTEHENDEN dietpi.txt geaendert werden!
+# Die Zeilen existieren bereits - NICHT neue Zeilen hinzufuegen,
+# sondern die vorhandenen Werte ersetzen!
+#
+# Datei: /boot/dietpi.txt (auf der Boot-Partition der SD-Karte)
+#
+# Suche nach jeder Zeile und aendere den Wert:
 
-# Automatische Installation ohne Nachfragen
+# --- Automatische Installation ohne Nachfragen ---
+# Suche: AUTO_SETUP_AUTOMATED=0
+# Aendere zu:
 AUTO_SETUP_AUTOMATED=1
 
-# Standard-Passwort (aendern wenn gewuenscht)
+# --- Passwort fuer root und dietpi User ---
+# Suche: AUTO_SETUP_GLOBAL_PASSWORD=dietpi
+# Aendere zu:
 AUTO_SETUP_GLOBAL_PASSWORD=chronosurf
 
-# Ethernet aktivieren (Internet-Uplink)
+# --- Ethernet aktivieren ---
+# Suche: AUTO_SETUP_NET_ETHERNET_ENABLED=...
+# Aendere zu:
 AUTO_SETUP_NET_ETHERNET_ENABLED=1
 
-# WiFi aktivieren (wird als AP konfiguriert)
+# --- WiFi-Hardware aktivieren (wird spaeter als AP konfiguriert) ---
+# Suche: AUTO_SETUP_NET_WIFI_ENABLED=...
+# Aendere zu:
 AUTO_SETUP_NET_WIFI_ENABLED=1
 
-# Serielle Konsole deaktivieren (brauchen wir nicht)
-CONFIG_SERIAL_CONSOLE_ENABLE=0
+# --- SSH Server aktivieren (Dropbear) ---
+# Suche: AUTO_SETUP_SSH_SERVER_INDEX=0
+# Aendere zu:
+AUTO_SETUP_SSH_SERVER_INDEX=-2
 
-# Locale
-AUTO_SETUP_LOCALE=de_DE.UTF-8
+# --- SSH Passwort-Login erlauben ---
+# Suche: SOFTWARE_DISABLE_SSH_PASSWORD_LOGINS=...
+# Aendere zu:
+SOFTWARE_DISABLE_SSH_PASSWORD_LOGINS=0
 
-# Timezone
-AUTO_SETUP_TIMEZONE=Europe/Berlin
-
-# Hostname (wird vom install.sh ueberschrieben, aber schadet nicht)
+# --- Hostname ---
+# Suche: AUTO_SETUP_NET_HOSTNAME=DietPi
+# Aendere zu:
 AUTO_SETUP_NET_HOSTNAME=chronosurf
 
-# I2C aktivieren
-CONFIG_I2C_STATE=1
+# --- Serielle Konsole deaktivieren (spart RAM) ---
+# Suche: CONFIG_SERIAL_CONSOLE_ENABLE=...
+# Aendere zu:
+CONFIG_SERIAL_CONSOLE_ENABLE=0
+
+# --- Sprache/Region ---
+# Suche: AUTO_SETUP_LOCALE=...
+# Aendere zu:
+AUTO_SETUP_LOCALE=de_DE.UTF-8
+
+# Suche: AUTO_SETUP_TIMEZONE=...
+# Aendere zu:
+AUTO_SETUP_TIMEZONE=Europe/Berlin
+
+# --- Kein Browser-basiertes Dashboard ---
+# Suche: AUTO_SETUP_WEB_SERVER_INDEX=0
+# Aendere zu (falls vorhanden):
+AUTO_SETUP_WEB_SERVER_INDEX=0
+
+# =============================================
+# NACH dem Editieren:
+# Kopiere Automation_Custom_Script.sh -> /boot/Automation_Custom_Script.sh
+# =============================================
