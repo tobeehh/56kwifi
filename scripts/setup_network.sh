@@ -280,15 +280,15 @@ iptables -t nat -A POSTROUTING -o ${INET_INTERFACE} -j MASQUERADE
 iptables -A FORWARD -i ${INET_INTERFACE} -o ${AP_INTERFACE} -m state --state RELATED,ESTABLISHED -j ACCEPT
 iptables -A FORWARD -i ${AP_INTERFACE} -o ${INET_INTERFACE} -j ACCEPT
 
-# Traffic an die Portal-IP selbst -> direkt zum Portal (NICHT durch Proxy!)
+# Traffic an die Portal-IP selbst (chronosurf.local) -> Portal (8080)
 iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -d ${AP_IP} -p tcp --dport 80 -j DNAT --to-destination ${AP_IP}:8080
-
-# Restlicher HTTP -> Captive Portal / Wayback-Proxy (Port 8080)
-iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -p tcp --dport 80 -j DNAT --to-destination ${AP_IP}:8080
-
-# HTTPS -> HTTPS Redirect Server auf Port 443 (leitet zu Wayback Machine um)
-# Traffic an die Portal-IP selbst wird nicht umgeleitet (damit web.archive.org ueber NAT geht)
 iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -d ${AP_IP} -p tcp --dport 443 -j DNAT --to-destination ${AP_IP}:443
+
+# Aller andere HTTP-Traffic (z.B. yahoo.com) -> Redirect-Server HTTP auf 8888
+iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -p tcp --dport 80 -j DNAT --to-destination ${AP_IP}:8888
+
+# HTTPS-Traffic zu nicht-bypassed Domains kommt nicht hier an,
+# da dnsmasq die IPs auf 192.168.4.1 hijackt (siehe Regel oben)
 
 # iptables persistent machen
 mkdir -p /etc/iptables

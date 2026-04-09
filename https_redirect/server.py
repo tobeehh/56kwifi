@@ -331,21 +331,29 @@ class ThreadedHTTPServer(HTTPServer):
 def main():
     generate_cert()
 
-    port = 443
-    server = ThreadedHTTPServer(("0.0.0.0", port), RedirectHandler)
-
+    # HTTPS Server auf Port 443
+    https_server = ThreadedHTTPServer(("0.0.0.0", 443), RedirectHandler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certfile=str(CERT_FILE), keyfile=str(KEY_FILE))
+    https_server.socket = context.wrap_socket(https_server.socket, server_side=True)
 
-    server.socket = context.wrap_socket(server.socket, server_side=True)
+    # HTTP Server auf Port 8888 (gleicher Handler - redirectet alles)
+    http_server = ThreadedHTTPServer(("0.0.0.0", 8888), RedirectHandler)
 
-    print(f"CHRONOSURF HTTPS Redirect Server on port {port}")
-    print(f"  Cert: {CERT_FILE}")
+    print("CHRONOSURF Redirect Server")
+    print(f"  HTTPS: port 443 (cert: {CERT_FILE})")
+    print(f"  HTTP:  port 8888")
 
+    # HTTPS in separatem Thread
+    https_thread = threading.Thread(target=https_server.serve_forever, daemon=True)
+    https_thread.start()
+
+    # HTTP im Main-Thread
     try:
-        server.serve_forever()
+        http_server.serve_forever()
     except KeyboardInterrupt:
-        server.shutdown()
+        http_server.shutdown()
+        https_server.shutdown()
 
 
 if __name__ == "__main__":
