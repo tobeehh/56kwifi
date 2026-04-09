@@ -60,16 +60,13 @@ def _query_availability(url, target_ts):
             api_url,
             headers={"User-Agent": "CHRONOSURF/1.0"},
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=2) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         closest = data.get("archived_snapshots", {}).get("closest")
         if closest and closest.get("available"):
             result = closest.get("url", "")
-            # Wayback gibt oft http:// URLs zurueck - wir brauchen https://
-            # sonst geht der Browser auf Port 80 und landet im iptables redirect
             if result.startswith("http://web.archive.org/"):
                 result = "https://" + result[len("http://"):]
-            # :80 aus der archivierten URL entfernen (browser-inkompatibel)
             result = result.replace(":80/", "/")
             return result
     except Exception as e:
@@ -105,21 +102,11 @@ def find_closest_snapshot(url, year):
     bare_host = host[4:] if host.startswith("www.") else host
     www_host = "www." + bare_host
 
-    # Probiere mehrere Varianten nacheinander
-    # Trailing-Slash spielt eine Rolle bei der Wayback API!
+    # Nur 2 Varianten fuer Performance (API ist oft langsam)
     variants = [
-        f"http://{host}{path}",            # Original
-        f"http://{host}{path}/",           # Original + Slash
-        f"http://{www_host}{path}",        # Mit www
-        f"http://{www_host}{path}/",       # Mit www + Slash
-        f"http://{bare_host}{path}",       # Ohne www
-        f"http://{bare_host}{path}/",      # Ohne www + Slash
-        host + path,                       # Ohne Protokoll
-        bare_host,                         # Root-Domain ohne www
-        www_host,                          # Root-Domain mit www
+        f"http://{www_host}{path or '/'}",   # Mit www und /
+        f"http://{bare_host}{path or '/'}",  # Ohne www und /
     ]
-
-    # Duplikate entfernen, Reihenfolge beibehalten
     seen = set()
     variants = [v for v in variants if v not in seen and not seen.add(v)]
 
@@ -216,18 +203,18 @@ class RedirectHandler(BaseHTTPRequestHandler):
 
         year = get_year_for_ip(client_ip)
 
-        # Erst Availability API fragen - findet den naechsten Snapshot
-        # auch ueber Jahresgrenzen hinweg und probiert URL-Varianten
+        # Direkt zur Wayback-URL weiterleiten - Wayback macht selbst closest-match.
+        # API-Lookup nur optional (wenn schnell verfuegbar) fuer genauen Timestamp.
         original_url = f"http://{host}{self.path}"
         closest = find_closest_snapshot(original_url, year)
 
-        if not closest:
-            # Nichts im Archive gefunden -> schoene Fehlerseite
-            self._send_not_archived(host, year)
-            return
-
-        wayback_url = closest
-        closest_year = closest.split("/web/")[-1][:4] if "/web/" in closest else str(year)
+        if closest:
+            wayback_url = closest
+            closest_year = closest.split("/web/")[-1][:4] if "/web/" in closest else str(year)
+        else:
+            # Fallback: direkte Wayback-URL - Wayback macht serverseitig closest-match
+            wayback_url = f"https://web.archive.org/web/{year}/http://{host}{self.path}"
+            closest_year = str(year)
 
         # HTML-Seite die automatisch weiterleitet
         # (besser als 302 damit die Zertifikatswarnung nur einmal kommt)
