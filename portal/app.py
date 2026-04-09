@@ -503,7 +503,12 @@ def api_closest():
                 data = json.loads(resp.read().decode("utf-8"))
             c = data.get("archived_snapshots", {}).get("closest")
             if c and c.get("available"):
-                return c.get("url"), c.get("timestamp", "")[:4]
+                result_url = c.get("url", "")
+                # Auf HTTPS umschreiben damit der Client nicht auf Port 80
+                # landet und in iptables-Redirect faellt
+                if result_url.startswith("http://web.archive.org/"):
+                    result_url = "https://" + result_url[len("http://"):]
+                return result_url, c.get("timestamp", "")[:4]
         except Exception:
             pass
         return None, None

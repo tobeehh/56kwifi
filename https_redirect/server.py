@@ -64,7 +64,12 @@ def _query_availability(url, target_ts):
             data = json.loads(resp.read().decode("utf-8"))
         closest = data.get("archived_snapshots", {}).get("closest")
         if closest and closest.get("available"):
-            return closest.get("url")
+            result = closest.get("url", "")
+            # Wayback gibt oft http:// URLs zurueck - wir brauchen https://
+            # sonst geht der Browser auf Port 80 und landet im iptables redirect
+            if result.startswith("http://web.archive.org/"):
+                result = "https://" + result[len("http://"):]
+            return result
     except Exception as e:
         print(f"Availability API error for {url}: {e}", file=sys.stderr)
     return None
