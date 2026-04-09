@@ -121,7 +121,10 @@ rfkill unblock wifi 2>/dev/null || true
 # ============================================
 echo "  [4/8] Deploying to ${INSTALL_DIR}..."
 mkdir -p "${INSTALL_DIR}"
-cp -r portal proxy hardware requirements.txt "${INSTALL_DIR}/"
+cp -r portal proxy hardware https_redirect requirements.txt "${INSTALL_DIR}/"
+
+# openssl fuer Zertifikat-Generierung
+apt-get install -y -qq openssl 2>/dev/null || true
 
 # ============================================
 # [5/8] Python-Abhaengigkeiten
@@ -158,11 +161,13 @@ echo "  [7/8] Installing services..."
 cp "${SCRIPT_DIR}/systemd/chronosurf-portal.service" /etc/systemd/system/
 cp "${SCRIPT_DIR}/systemd/chronosurf-proxy.service" /etc/systemd/system/
 cp "${SCRIPT_DIR}/systemd/chronosurf-hardware.service" /etc/systemd/system/
+cp "${SCRIPT_DIR}/systemd/chronosurf-https.service" /etc/systemd/system/
 
 systemctl daemon-reload
 systemctl enable chronosurf-portal.service
 systemctl enable chronosurf-proxy.service
 systemctl enable chronosurf-hardware.service
+systemctl enable chronosurf-https.service
 
 # ============================================
 # [8/8] Performance Optimierungen

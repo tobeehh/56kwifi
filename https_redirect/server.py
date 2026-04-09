@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""
+CHRONOSURF - HTTPS Redirect Server
+
+Faengt alle HTTPS-Anfragen ab und leitet sie an die Wayback Machine weiter.
+
+Wenn ein Client https://yahoo.com aufruft:
+1. DNS-Hijacking leitet yahoo.com -> 192.168.4.1
+2. Dieser Server antwortet auf Port 443 mit Self-Signed Cert
+3. Browser zeigt Zertifikatswarnung (einmalig akzeptieren)
+4. Server liest den Host-Header
+5. Sendet 302 Redirect zu https://web.archive.org/web/YEAR/http://yahoo.com
+6. Browser folgt dem Redirect direkt zum echten Archive
+
+Das Jahr kommt aus dem State-File (pro MAC-Adresse).
+Das Zertifikat wird beim ersten Start generiert.
+"""
+
+import json
+import os
+import ssl
+import subprocess
+import sys
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+
+STATE_FILE = Path("/tmp/chronosurf_state.json")
+CERT_DIR = Path("/opt/chronosurf/https_redirect/certs")
+CERT_FILE = CERT_DIR / "chronosurf.crt"
+KEY_FILE = CERT_DIR / "chronosurf.key"
+DEFAULT_YEAR = 1999
+
+# Bypass: diese Domains werden NICHT an Wayback geleitet
+# (chronosurf selbst + archive.org damit der Redirect zum Wayback funktioniert)
+BYPASS_DOMAINS = {
+    "chronosurf.local",
+    "192.168.4.1",
+}
+
+
+def _get_mac_for_ip(ip):
+    try:
+        with open("/proc/net/arp", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4 and parts[0] == ip:
+                    mac = parts[3]
+                    if mac != "00:00:00:00:00:00":
+                        return mac.upper()
+    except (FileNotFoundError, PermissionError):
+        pass
+    return ip
+
+
+def get_year_for_ip(client_ip):
+    """Liest das Jahr fuer eine Client-IP aus dem State."""
+    mac = _get_mac_for_ip(client_ip)
+    try:
+        data = json.loads(STATE_FILE.read_text())
+        client = data.get("clients", {}).get(mac, {})
+        if client.get("active", False):
+            return client.get("year", DEFAULT_YEAR)
+        return data.get("global_year", DEFAULT_YEAR)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return DEFAULT_YEAR
+
+
+def generate_cert():
+    """Generiert ein Self-Signed Zertifikat falls noch keins da ist."""
+    CERT_DIR.mkdir(parents=True, exist_ok=True)
+
+    if CERT_FILE.exists() and KEY_FILE.exists():
+        return
+
+    print("Generating self-signed certificate...")
+    subprocess.run([
+        "openssl", "req", "-x509", "-newkey", "rsa:2048", "-sha256",
+        "-days", "3650", "-nodes",
+        "-keyout", str(KEY_FILE),
+        "-out", str(CERT_FILE),
+        "-subj", "/CN=chronosurf.local/O=CHRONOSURF/C=US",
+        "-addext", "subjectAltName=DNS:*,DNS:chronosurf.local,IP:192.168.4.1",
+    ], check=True, capture_output=True)
+    print(f"Certificate created: {CERT_FILE}")
+
+
+class RedirectHandler(BaseHTTPRequestHandler):
+
+    def log_message(self, format, *args):
+        pass
+
+    def do_GET(self):
+        self._redirect()
+
+    def do_POST(self):
+        self._redirect()
+
+    def do_HEAD(self):
+        self._redirect()
+
+    def _redirect(self):
+        host = self.headers.get("Host", "").split(":")[0].lower()
+        client_ip = self.client_address[0]
+
+        # Bypass: lokale Domains
+        if host in BYPASS_DOMAINS or host == "":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<h1>CHRONOSURF</h1>")
+            return
+
+        year = get_year_for_ip(client_ip)
+
+        # Wayback URL bauen
+        wayback_url = f"https://web.archive.org/web/{year}/http://{host}{self.path}"
+
+        # HTML-Seite die automatisch weiterleitet
+        # (besser als 302 damit die Zertifikatswarnung nur einmal kommt)
+        body = f"""<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="0;url={wayback_url}">
+<title>CHRONOSURF - Time Warp</title>
+<style>
+body {{ background: #06080a; color: #00ff41; font-family: monospace;
+       display: flex; align-items: center; justify-content: center;
+       min-height: 100vh; text-align: center; }}
+h1 {{ font-size: 2rem; text-shadow: 0 0 20px #00ff41; }}
+p {{ color: #888; margin-top: 1rem; }}
+a {{ color: #00e5ff; }}
+.year {{ color: #00ff41; font-weight: 700; font-size: 3rem; }}
+</style>
+</head><body>
+<div>
+<h1>WARPING THROUGH TIME</h1>
+<p>{host}</p>
+<div class="year">{year}</div>
+<p>If you are not redirected automatically,<br><a href="{wayback_url}">click here</a></p>
+</div>
+<script>window.location.href = {wayback_url!r};</script>
+</body></html>"""
+
+        content = body.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(content)
+
+
+class ThreadedHTTPServer(HTTPServer):
+    allow_reuse_address = True
+
+    def process_request(self, request, client_address):
+        thread = threading.Thread(
+            target=self._handle, args=(request, client_address), daemon=True
+        )
+        thread.start()
+
+    def _handle(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except (ssl.SSLError, ConnectionResetError, BrokenPipeError):
+            pass
+        except Exception as e:
+            print(f"Handler error: {e}", file=sys.stderr)
+        finally:
+            self.shutdown_request(request)
+
+
+def main():
+    generate_cert()
+
+    port = 443
+    server = ThreadedHTTPServer(("0.0.0.0", port), RedirectHandler)
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certfile=str(CERT_FILE), keyfile=str(KEY_FILE))
+
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+
+    print(f"CHRONOSURF HTTPS Redirect Server on port {port}")
+    print(f"  Cert: {CERT_FILE}")
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.shutdown()
+
+
+if __name__ == "__main__":
+    main()

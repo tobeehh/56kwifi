@@ -210,7 +210,7 @@ mv /etc/dnsmasq.conf /etc/dnsmasq.conf.bak 2>/dev/null || true
 cat > /etc/dnsmasq.conf << DNSMASQ
 # CHRONOSURF - DHCP & DNS for captive portal
 
-# Only listen on AP interface
+# Only listen on AP interface (Pi selbst nutzt /etc/resolv.conf)
 interface=${AP_INTERFACE}
 bind-dynamic
 
@@ -219,21 +219,27 @@ dhcp-range=${DHCP_RANGE_START},${DHCP_RANGE_END},255.255.255.0,24h
 dhcp-option=option:router,${AP_IP}
 dhcp-option=option:dns-server,${AP_IP}
 
-# Upstream DNS for real lookups (web.archive.org etc.)
+# Upstream DNS for the few domains we don't hijack
 server=8.8.8.8
 server=8.8.4.4
 
-# Captive portal detection - redirect to portal IP
-address=/connectivitycheck.gstatic.com/${AP_IP}
-address=/clients3.google.com/${AP_IP}
-address=/captive.apple.com/${AP_IP}
-address=/www.apple.com/${AP_IP}
-address=/detectportal.firefox.com/${AP_IP}
-address=/msftconnecttest.com/${AP_IP}
-address=/www.msftconnecttest.com/${AP_IP}
-address=/nmcheck.gnome.org/${AP_IP}
+# DNS Cache
+cache-size=1000
+neg-ttl=3600
 
-# Local hostname
+# --- DNS Hijacking ---
+# ALLE Domains werden auf den Pi umgeleitet (Wildcard)
+# Ausnahmen: web.archive.org und archive.org duerfen normal aufgeloest werden,
+# damit der Browser nach dem HTTPS-Redirect die echte Wayback Machine erreicht.
+address=/#/${AP_IP}
+
+# Bypass-Domains (NICHT hijacken)
+server=/archive.org/8.8.8.8
+server=/web.archive.org/8.8.8.8
+server=/wayback-api.archive.org/8.8.8.8
+server=/ajax.googleapis.com/8.8.8.8
+
+# Lokale Hostname
 address=/chronosurf.local/${AP_IP}
 DNSMASQ
 
@@ -273,11 +279,12 @@ iptables -A FORWARD -i ${AP_INTERFACE} -o ${INET_INTERFACE} -j ACCEPT
 # Traffic an die Portal-IP selbst -> direkt zum Portal (NICHT durch Proxy!)
 iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -d ${AP_IP} -p tcp --dport 80 -j DNAT --to-destination ${AP_IP}:8080
 
-# Restlicher HTTP -> Captive Portal (Port 8080) - wird spaeter vom Proxy ueberschrieben
+# Restlicher HTTP -> Captive Portal / Wayback-Proxy (Port 8080)
 iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -p tcp --dport 80 -j DNAT --to-destination ${AP_IP}:8080
-# HTTPS: NICHT umleiten! Sonst funktioniert kein HTTPS fuer Clients.
-# Captive Portal Detection funktioniert auch ohne HTTPS-Redirect,
-# da alle gaengigen OS zuerst HTTP-Endpunkte pruefen.
+
+# HTTPS -> HTTPS Redirect Server auf Port 443 (leitet zu Wayback Machine um)
+# Traffic an die Portal-IP selbst wird nicht umgeleitet (damit web.archive.org ueber NAT geht)
+iptables -t nat -A PREROUTING -i ${AP_INTERFACE} -d ${AP_IP} -p tcp --dport 443 -j DNAT --to-destination ${AP_IP}:443
 
 # iptables persistent machen
 mkdir -p /etc/iptables

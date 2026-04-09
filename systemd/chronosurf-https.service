@@ -1,0 +1,15 @@
+[Unit]
+Description=Chronosurf HTTPS Redirect Server
+After=network.target chronosurf-portal.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/chronosurf/https_redirect
+ExecStart=/usr/bin/python3 /opt/chronosurf/https_redirect/server.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
