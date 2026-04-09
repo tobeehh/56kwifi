@@ -214,6 +214,10 @@ cat > /etc/dnsmasq.conf << DNSMASQ
 interface=${AP_INTERFACE}
 bind-dynamic
 
+# IPv6 AAAA records filtern (wir hijacken nur IPv4)
+# Sonst umgeht der Client unser Hijacking ueber IPv6
+filter-AAAA
+
 # DHCP range
 dhcp-range=${DHCP_RANGE_START},${DHCP_RANGE_END},255.255.255.0,24h
 dhcp-option=option:router,${AP_IP}
