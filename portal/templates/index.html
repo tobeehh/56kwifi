@@ -280,9 +280,12 @@
             fetch('/api/closest?url=' + encodeURIComponent(url) + '&year=' + year)
                 .then(r => r.json())
                 .then(data => {
-                    const target = data.url ||
-                        ('https://web.archive.org/web/' + year + '/http://' + url);
-                    if (win) win.location.href = target;
+                    if (data.url) {
+                        if (win) win.location.href = data.url;
+                    } else {
+                        if (win) win.close();
+                        alert(url + '\n\nThis site is not archived in the Wayback Machine.');
+                    }
                 })
                 .catch(() => {
                     if (win) win.location.href =
@@ -304,9 +307,11 @@
             fetch('/api/closest?url=' + encodeURIComponent(url) + '&year=' + year)
                 .then(r => r.json())
                 .then(data => {
-                    const target = data.url ||
-                        ('https://web.archive.org/web/' + year + '/http://' + url);
-                    window.open(target, '_blank');
+                    if (data.url) {
+                        window.open(data.url, '_blank');
+                    } else {
+                        alert(url + '\n\nThis site is not archived in the Wayback Machine.');
+                    }
                 })
                 .catch(() => {
                     window.open('https://web.archive.org/web/' + year + '/http://' + url, '_blank');

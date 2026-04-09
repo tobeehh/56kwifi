@@ -463,33 +463,58 @@ def api_closest():
     if not url:
         return jsonify({"url": None})
 
-    url = url.replace("https://", "").replace("http://", "")
+    url = url.replace("https://", "").replace("http://", "").rstrip("/")
     target_ts = f"{year}0601000000"
 
-    try:
-        api_url = (
-            "https://archive.org/wayback/available"
-            f"?url={_up.quote(url, safe='')}"
-            f"&timestamp={target_ts}"
-        )
-        req = _ur.Request(api_url, headers={"User-Agent": "CHRONOSURF/1.0"})
-        with _ur.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+    # Mehrere URL-Varianten probieren (manche Seiten sind nur unter
+    # bestimmten Schreibweisen im Archive)
+    if "/" in url:
+        host, path = url.split("/", 1)
+        path = "/" + path
+    else:
+        host, path = url, ""
+    bare_host = host[4:] if host.startswith("www.") else host
+    www_host = "www." + bare_host
 
-        closest = data.get("archived_snapshots", {}).get("closest")
-        if closest and closest.get("available"):
-            result_url = closest.get("url")
-            ts = closest.get("timestamp", "")
-            result_year = ts[:4] if ts else year
-            return jsonify({"url": result_url, "year": int(result_year)})
-    except Exception:
-        pass
+    variants = []
+    for v in [
+        f"http://{host}{path}",
+        f"http://{www_host}{path}",
+        f"http://{bare_host}{path}",
+        host + path,
+        bare_host,
+        www_host,
+    ]:
+        if v not in variants:
+            variants.append(v)
 
-    # Fallback
-    return jsonify({
-        "url": f"https://web.archive.org/web/{year}/http://{url}",
-        "year": int(year),
-    })
+    def _query(u):
+        try:
+            api_url = (
+                "https://archive.org/wayback/available"
+                f"?url={_up.quote(u, safe='')}"
+                f"&timestamp={target_ts}"
+            )
+            req = _ur.Request(api_url, headers={"User-Agent": "CHRONOSURF/1.0"})
+            with _ur.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            c = data.get("archived_snapshots", {}).get("closest")
+            if c and c.get("available"):
+                return c.get("url"), c.get("timestamp", "")[:4]
+        except Exception:
+            pass
+        return None, None
+
+    for variant in variants:
+        result_url, result_year = _query(variant)
+        if result_url:
+            return jsonify({
+                "url": result_url,
+                "year": int(result_year) if result_year else int(year),
+            })
+
+    # Nichts gefunden -> url = None, Client zeigt "Not Archived"
+    return jsonify({"url": None, "year": int(year)})
 
 
 @app.route("/api/year_for_ip/<ip>")

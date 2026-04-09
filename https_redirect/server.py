@@ -48,22 +48,8 @@ _cache_lock = threading.Lock()
 CACHE_TTL = 3600  # 1h
 
 
-def find_closest_snapshot(url, year):
-    """
-    Fragt die Wayback Availability API nach dem naechstgelegenen Snapshot.
-
-    Returns: Vollstaendige Wayback-URL mit exaktem Timestamp oder None.
-    """
-    target_ts = f"{year}0601000000"  # Mitte des Jahres
-    cache_key = (url, target_ts)
-
-    # Cache-Check
-    with _cache_lock:
-        cached = _availability_cache.get(cache_key)
-        if cached and (time.time() - cached[1]) < CACHE_TTL:
-            return cached[0]
-
-    # API-Aufruf
+def _query_availability(url, target_ts):
+    """Ein einzelner Availability-API-Aufruf."""
     try:
         api_url = (
             "https://archive.org/wayback/available"
@@ -76,21 +62,67 @@ def find_closest_snapshot(url, year):
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-
         closest = data.get("archived_snapshots", {}).get("closest")
         if closest and closest.get("available"):
-            result = closest.get("url")
-        else:
-            result = None
-
+            return closest.get("url")
     except Exception as e:
-        print(f"Availability API error: {e}", file=sys.stderr)
-        result = None
+        print(f"Availability API error for {url}: {e}", file=sys.stderr)
+    return None
+
+
+def find_closest_snapshot(url, year):
+    """
+    Fragt die Wayback Availability API nach dem naechstgelegenen Snapshot.
+    Probiert mehrere URL-Varianten falls die erste nichts findet.
+
+    Returns: Vollstaendige Wayback-URL mit exaktem Timestamp oder None.
+    """
+    target_ts = f"{year}0601000000"
+    cache_key = (url, target_ts)
+
+    with _cache_lock:
+        cached = _availability_cache.get(cache_key)
+        if cached and (time.time() - cached[1]) < CACHE_TTL:
+            return cached[0]
+
+    # URL-Varianten extrahieren
+    # "http://example.com/path" -> host="example.com", path="/path"
+    stripped = url.replace("http://", "").replace("https://", "")
+    if "/" in stripped:
+        host, path = stripped.split("/", 1)
+        path = "/" + path
+    else:
+        host, path = stripped, ""
+
+    # Domain ohne "www."
+    bare_host = host[4:] if host.startswith("www.") else host
+    www_host = "www." + bare_host
+
+    # Probiere mehrere Varianten nacheinander
+    variants = [
+        f"http://{host}{path}",      # Original
+        f"http://{www_host}{path}",  # Mit www
+        f"http://{bare_host}{path}", # Ohne www
+        host + path,                 # Ohne Protokoll
+        bare_host,                   # Nur Root-Domain ohne www
+        www_host,                    # Nur Root-Domain mit www
+    ]
+
+    # Duplikate entfernen, Reihenfolge beibehalten
+    seen = set()
+    variants = [v for v in variants if v not in seen and not seen.add(v)]
+
+    result = None
+    for variant in variants:
+        result = _query_availability(variant, target_ts)
+        if result:
+            print(f"Found snapshot via variant '{variant}' -> {result}",
+                  file=sys.stderr)
+            break
 
     # Cachen (auch Failures fuer kurze Zeit)
     with _cache_lock:
         _availability_cache[cache_key] = (result, time.time())
-        # Cache begrenzt halten
         if len(_availability_cache) > 500:
             oldest = sorted(_availability_cache.items(), key=lambda x: x[1][1])[:100]
             for k, _ in oldest:
@@ -174,17 +206,17 @@ class RedirectHandler(BaseHTTPRequestHandler):
         year = get_year_for_ip(client_ip)
 
         # Erst Availability API fragen - findet den naechsten Snapshot
-        # auch ueber Jahresgrenzen hinweg
+        # auch ueber Jahresgrenzen hinweg und probiert URL-Varianten
         original_url = f"http://{host}{self.path}"
         closest = find_closest_snapshot(original_url, year)
 
-        if closest:
-            wayback_url = closest
-            closest_year = closest.split("/web/")[-1][:4] if "/web/" in closest else str(year)
-        else:
-            # Fallback: direkte Wayback-URL mit Jahr
-            wayback_url = f"https://web.archive.org/web/{year}/http://{host}{self.path}"
-            closest_year = str(year)
+        if not closest:
+            # Nichts im Archive gefunden -> schoene Fehlerseite
+            self._send_not_archived(host, year)
+            return
+
+        wayback_url = closest
+        closest_year = closest.split("/web/")[-1][:4] if "/web/" in closest else str(year)
 
         # HTML-Seite die automatisch weiterleitet
         # (besser als 302 damit die Zertifikatswarnung nur einmal kommt)
@@ -213,6 +245,49 @@ a {{ color: #00e5ff; }}
 <script>window.location.href = {wayback_url!r};</script>
 </body></html>"""
 
+        content = body.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _send_not_archived(self, host, year):
+        """Freundliche Seite wenn die Wayback Machine keinen Snapshot hat."""
+        body = f"""<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>CHRONOSURF - Not Archived</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#06080a;color:#c9d1d9;font-family:monospace;
+min-height:100vh;display:flex;align-items:center;justify-content:center;
+text-align:center;padding:2rem}}
+.box{{max-width:500px}}
+.code{{font-size:5rem;font-weight:700;color:#ff6b35;
+text-shadow:0 0 30px rgba(255,107,53,0.3);line-height:1}}
+h1{{font-size:1.2rem;color:#ff6b35;margin:1rem 0 0.5rem;letter-spacing:2px}}
+.site{{color:#58a6ff;font-size:1.1rem;margin:0.5rem 0}}
+.year{{color:#00ff41;font-weight:700}}
+.msg{{color:#8b949e;font-size:0.9rem;line-height:1.6;margin:1.5rem 0}}
+.btn{{display:inline-block;padding:0.6rem 1.5rem;border:1px solid #58a6ff;
+border-radius:4px;color:#58a6ff;text-decoration:none;font-size:0.8rem;
+letter-spacing:2px;margin-top:1rem}}
+.btn:hover{{background:#58a6ff;color:#06080a}}
+</style>
+</head><body>
+<div class="box">
+<div class="code">404</div>
+<h1>NOT ARCHIVED</h1>
+<div class="site">{host}</div>
+<div class="msg">
+This site was never captured by the Wayback Machine,<br>
+or it wasn't online in <span class="year">{year}</span>.
+</div>
+<a href="http://chronosurf.local/" class="btn">BACK TO CHRONOSURF</a>
+</div>
+</body></html>"""
         content = body.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
