@@ -479,8 +479,11 @@ def api_closest():
     variants = []
     for v in [
         f"http://{host}{path}",
+        f"http://{host}{path}/",
         f"http://{www_host}{path}",
+        f"http://{www_host}{path}/",
         f"http://{bare_host}{path}",
+        f"http://{bare_host}{path}/",
         host + path,
         bare_host,
         www_host,

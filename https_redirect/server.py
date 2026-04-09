@@ -99,13 +99,17 @@ def find_closest_snapshot(url, year):
     www_host = "www." + bare_host
 
     # Probiere mehrere Varianten nacheinander
+    # Trailing-Slash spielt eine Rolle bei der Wayback API!
     variants = [
-        f"http://{host}{path}",      # Original
-        f"http://{www_host}{path}",  # Mit www
-        f"http://{bare_host}{path}", # Ohne www
-        host + path,                 # Ohne Protokoll
-        bare_host,                   # Nur Root-Domain ohne www
-        www_host,                    # Nur Root-Domain mit www
+        f"http://{host}{path}",            # Original
+        f"http://{host}{path}/",           # Original + Slash
+        f"http://{www_host}{path}",        # Mit www
+        f"http://{www_host}{path}/",       # Mit www + Slash
+        f"http://{bare_host}{path}",       # Ohne www
+        f"http://{bare_host}{path}/",      # Ohne www + Slash
+        host + path,                       # Ohne Protokoll
+        bare_host,                         # Root-Domain ohne www
+        www_host,                          # Root-Domain mit www
     ]
 
     # Duplikate entfernen, Reihenfolge beibehalten
