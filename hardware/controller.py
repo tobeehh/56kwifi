@@ -120,7 +120,6 @@ def read_state():
 
     except (FileNotFoundError, json.JSONDecodeError):
         current_year = DEFAULT_YEAR
-        current_speed_idx = 0
         active_count = 0
         active_clients = []
 
@@ -185,16 +184,15 @@ def poll_encoders():
                 info_mode_active = False
                 update_display()
 
-        # --- Year Button ---
+        # --- Year Button: DIAL IN mit Modem-Sound ---
         btn = GPIO.input(PIN_YEAR_BTN)
         if btn == 0 and last_year_btn == 1:
             write_global_state()
-            print(f"YEAR SET: {current_year}")
-            if HW_AVAILABLE and lcd is not None:
-                with display_lock:
-                    _lcd_write_line(3, f" \x04 YEAR SET: {current_year}")
-                time.sleep(1)
-                update_display()
+            print(f"DIAL IN: {current_year}")
+            # Modem-Sound + LCD-Animation
+            play_async(play_dialup_sound)
+            show_dialin_animation()
+            update_display()
         last_year_btn = btn
 
         # --- Info Encoder ---
@@ -541,6 +539,50 @@ def show_boot_screen():
 
 
 # --- Surfer Events ---
+
+def show_dialin_animation():
+    """Dial-In Animation wenn am Hardware-Encoder ein Jahr bestaetigt wird.
+    Passend zum Modem-Sound - laeuft parallel ab."""
+    if not HW_AVAILABLE or lcd is None:
+        print(f"[LCD] DIAL IN >>> {current_year}")
+        return
+
+    with display_lock:
+        lcd.clear()
+
+        # Phase 1: Dial
+        _lcd_write_line(0, f"DIAL IN >>> {current_year}")
+        _lcd_write_line(1, "")
+        _lcd_write_line(2, "")
+        _lcd_write_line(3, "")
+        time.sleep(0.3)
+
+        # Phase 2: Status Messages (parallel zum Modem-Sound)
+        status_msgs = [
+            "Resolving coords...",
+            "Connecting to node..",
+            "Baud rate: 56000",
+            "Loading epoch data..",
+            "Rebuilding DOM...",
+        ]
+
+        for i, msg in enumerate(status_msgs):
+            _lcd_write_line(1, msg)
+            # Progress Bar
+            filled = int((i + 1) / len(status_msgs) * LCD_COLS)
+            bar = "\x00" * filled + " " * (LCD_COLS - filled)
+            _lcd_write_line(2, bar)
+            pct = int((i + 1) / len(status_msgs) * 100)
+            _lcd_write_line(3, f"          [{pct:>3d}%]")
+            time.sleep(0.55)  # Laenger damit Sound mithalten kann
+
+        # Phase 3: Connected!
+        _lcd_write_line(0, f"  >>> {current_year} <<<")
+        _lcd_write_line(1, "")
+        _lcd_write_line(2, "\x00" * LCD_COLS)
+        _lcd_write_line(3, "  LINK ESTABLISHED  ")
+        time.sleep(1.0)
+
 
 def show_surfer_connected(mac_short, year):
     if not HW_AVAILABLE or lcd is None:
