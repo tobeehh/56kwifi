@@ -24,7 +24,7 @@
                   SCL  GPIO3 [5]  [6]  GND
                        GPIO4 [7]  [8]  GPIO14
                          GND [9]  [10] GPIO15
-     YEAR_CLK  GPIO17 [11] [12] GPIO18  YEAR_DT
+     YEAR_DT   GPIO17 [11] [12] GPIO18  YEAR_CLK
      YEAR_BTN  GPIO27 [13] [14] GND
        BUZZER  GPIO22 [15] [16] GPIO23
                          3V3 [17] [18] GPIO24
@@ -33,9 +33,9 @@
                       GPIO11 [23] [24] GPIO8
                          GND [25] [26] GPIO7
                        GPIO0 [27] [28] GPIO1
-    SPEED_CLK   GPIO5 [29] [30] GND
-    SPEED_DT    GPIO6 [31] [32] GPIO12
-    SPEED_BTN  GPIO13 [33] [34] GND
+    INFO_CLK    GPIO5 [29] [30] GND
+    INFO_DT     GPIO6 [31] [32] GPIO12
+    INFO_BTN   GPIO13 [33] [34] GND
                       GPIO19 [35] [36] GPIO16
                       GPIO26 [37] [38] GPIO20
                          GND [39] [40] GPIO21
@@ -45,14 +45,14 @@
     [3]  GPIO2/SDA  --> LCD SDA
     [5]  GPIO3/SCL  --> LCD SCL
     [9]  GND        --> LCD GND, Buzzer -, gemeinsam
-    [11] GPIO17     --> Encoder 1 CLK  (Jahr)
-    [12] GPIO18     --> Encoder 1 DT   (Jahr)
-    [13] GPIO27     --> Encoder 1 SW   (Jahr bestaetigen)
+    [11] GPIO17     --> Encoder 1 DT   (Year)
+    [12] GPIO18     --> Encoder 1 CLK  (Year)
+    [13] GPIO27     --> Encoder 1 SW   (Year bestaetigen)
     [15] GPIO22     --> Buzzer +
     [17] 3V3        --> Encoder 1 VCC, Encoder 2 VCC
-    [29] GPIO5      --> Encoder 2 CLK  (Speed)
-    [31] GPIO6      --> Encoder 2 DT   (Speed)
-    [33] GPIO13     --> Encoder 2 SW   (Speed bestaetigen)
+    [29] GPIO5      --> Encoder 2 CLK  (Info)
+    [31] GPIO6      --> Encoder 2 DT   (Info)
+    [33] GPIO13     --> Encoder 2 SW   (Info toggle)
 ```
 
 ## Verkabelung
@@ -104,31 +104,34 @@ aber 3.3V-tolerant ueber den PCF8574. Kein Level-Shifter noetig.
     Druecken                 = Jahr als Default setzen
 ```
 
-### 3. Encoder 2 - SPEED (KY-040 mit Pushbutton)
+### 3. Encoder 2 - INFO (KY-040 mit Pushbutton)
 
 ```
     KY-040 Encoder 2               Raspberry Pi
     ┌─────────────┐
     │  ┌───────┐  │
-    │  │ SPEED │  │
+    │  │ INFO  │  │
     │  │ Knopf │  │
     │  └───────┘  │
     │             │
     │  GND ────────────────────── Pin 34 (GND)
     │   +  ────────────────────── Pin 17 (3V3)  <- geteilt mit Enc. 1
-    │  SW  ────────────────────── Pin 33 (GPIO13)  Druecken = bestaetigen
+    │  SW  ────────────────────── Pin 33 (GPIO13)  Druecken = Modus toggle
     │  DT  ────────────────────── Pin 31 (GPIO6)   Drehrichtung
     │  CLK ────────────────────── Pin 29 (GPIO5)   Taktgeber
     │             │
     └─────────────┘
 
-    Drehen im Uhrzeigersinn  = schneller (56k > ISDN > DSL > ... > FULL)
-    Drehen gegen Uhrzeiger   = langsamer
-    Druecken                 = Speed als Default setzen
+    Drehen          = durch Info-Screens bloettern
+    Druecken        = Info-Modus ein/aus
+    Year-Encoder    = verlaesst Info-Modus automatisch
 
-    Speed-Stufen:
-    56k Modem (56 kbit/s) -> ISDN (128k) -> DSL 384k ->
-    DSL 1000 -> DSL 6000 -> DSL 16000 -> FULL SPEED
+    Info-Screens:
+    - SYSTEM:  CPU Load, RAM, Temperatur
+    - NETWORK: Ethernet/WiFi IPs, SSID
+    - SURFERS: Aktive Clients mit ihrem Jahr
+    - UPTIME:  System- und Controller-Uptime
+    - WAYBACK: Wayback Machine Info
 ```
 
 ### 4. Passiver Buzzer

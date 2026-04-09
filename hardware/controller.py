@@ -4,8 +4,16 @@ CHRONOSURF - Hardware Controller
 
 Zwei Rotary Encoder mit integriertem Pushbutton:
   - Rotary Encoder (YEAR): CLK=GPIO18, DT=GPIO17, BTN=GPIO27
+  - Rotary Encoder (INFO): CLK=GPIO5,  DT=GPIO6,  BTN=GPIO13
   - I2C LCD 20x4 (HD44780 + PCF8574): I2C Bus 1, Adresse 0x27
   - Passiver Buzzer: GPIO22
+
+Der zweite Encoder schaltet durch System-Info-Screens:
+  system  - CPU Load, RAM, Temperatur
+  network - Ethernet/WiFi IPs
+  clients - Aktive Surfer mit ihrem Jahr
+  uptime  - System- und Controller-Uptime
+  wayback - Wayback Machine Info
 
 Encoder 1 stellt das Jahr ein (1996-2025), Button bestaetigt.
 Encoder 2 stellt die Geschwindigkeit ein (56k..full), Button bestaetigt.
@@ -49,6 +57,11 @@ PIN_YEAR_BTN = 27
 # Buzzer
 PIN_BUZZER = 22
 
+# Info Encoder (zweiter Encoder fuer System-Infos)
+PIN_INFO_CLK = 5
+PIN_INFO_DT  = 6
+PIN_INFO_BTN = 13
+
 # LCD
 LCD_I2C_ADDR = 0x27
 LCD_I2C_PORT = 1
@@ -62,13 +75,19 @@ CHAR_ARROW_L = (0x00, 0x04, 0x0C, 0x1F, 0x1F, 0x0C, 0x04, 0x00)
 CHAR_CONN    = (0x00, 0x0E, 0x11, 0x04, 0x0A, 0x00, 0x04, 0x00)
 CHAR_GAUGE   = (0x00, 0x0E, 0x15, 0x17, 0x11, 0x0E, 0x00, 0x00)  # Speed gauge
 
+# Info-Modus
+INFO_SCREENS = ["system", "network", "clients", "uptime", "wayback"]
+info_mode_active = False
+info_screen_idx = 0
+
 # Zustand
 current_year = DEFAULT_YEAR
 active_count = 0
 active_clients = []
 display_lock = threading.Lock()
 last_year_clk = None
-last_speed_clk = None
+last_info_clk = None
+boot_time = time.time()
 lcd = None
 
 
@@ -123,23 +142,32 @@ def write_global_state():
 # --- GPIO Setup ---
 
 def setup_gpio():
-    global last_year_clk
+    global last_year_clk, last_info_clk
 
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
 
+    # Year Encoder
     GPIO.setup(PIN_YEAR_CLK, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(PIN_YEAR_DT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(PIN_YEAR_BTN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
+    # Info Encoder
+    GPIO.setup(PIN_INFO_CLK, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(PIN_INFO_DT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(PIN_INFO_BTN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
     last_year_clk = GPIO.input(PIN_YEAR_CLK)
+    last_info_clk = GPIO.input(PIN_INFO_CLK)
 
 
 def poll_encoders():
-    """Polling-Thread fuer Encoder und Button (ersetzt edge detection)."""
-    global current_year, last_year_clk
+    """Polling-Thread fuer beide Encoder und Buttons."""
+    global current_year, last_year_clk, last_info_clk
+    global info_mode_active, info_screen_idx
 
     last_year_btn = 1
+    last_info_btn = 1
 
     while True:
         # --- Year Encoder ---
@@ -153,6 +181,8 @@ def poll_encoders():
                 else:
                     current_year = max(MIN_YEAR, current_year - 1)
                 play_click_sound()
+                # Jahreswechsel verlaesst den Info-Modus
+                info_mode_active = False
                 update_display()
 
         # --- Year Button ---
@@ -166,6 +196,28 @@ def poll_encoders():
                 time.sleep(1)
                 update_display()
         last_year_btn = btn
+
+        # --- Info Encoder ---
+        clk = GPIO.input(PIN_INFO_CLK)
+        if clk != last_info_clk:
+            last_info_clk = clk
+            if clk == 0:
+                dt = GPIO.input(PIN_INFO_DT)
+                info_mode_active = True
+                if dt != clk:
+                    info_screen_idx = (info_screen_idx + 1) % len(INFO_SCREENS)
+                else:
+                    info_screen_idx = (info_screen_idx - 1) % len(INFO_SCREENS)
+                play_click_sound()
+                update_display()
+
+        # --- Info Button: togglet Info-Modus ---
+        btn = GPIO.input(PIN_INFO_BTN)
+        if btn == 0 and last_info_btn == 1:
+            info_mode_active = not info_mode_active
+            print(f"Info mode: {info_mode_active}")
+            update_display()
+        last_info_btn = btn
 
         time.sleep(0.001)
 
@@ -206,7 +258,154 @@ def _timeline_bar(year):
     return bar
 
 
+# --- Info-Modus: Screens ---
+
+def _get_ip(iface):
+    """Liest die IP-Adresse eines Interfaces."""
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["ip", "-4", "-o", "addr", "show", iface],
+            capture_output=True, text=True, timeout=1
+        )
+        for line in r.stdout.split("\n"):
+            if "inet " in line:
+                return line.split("inet ")[1].split("/")[0]
+    except Exception:
+        pass
+    return "---"
+
+
+def _format_uptime(seconds):
+    """Formatiert Sekunden als 'Xd Yh Zm'."""
+    d = int(seconds // 86400)
+    h = int((seconds % 86400) // 3600)
+    m = int((seconds % 3600) // 60)
+    if d > 0:
+        return f"{d}d {h}h {m}m"
+    if h > 0:
+        return f"{h}h {m}m"
+    return f"{m}m"
+
+
+def _info_lines_system():
+    """System-Info Screen."""
+    try:
+        with open("/proc/loadavg", "r") as f:
+            load = f.read().split()[0]
+    except Exception:
+        load = "?"
+
+    try:
+        with open("/proc/meminfo", "r") as f:
+            mem = {}
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    mem[parts[0].rstrip(":")] = int(parts[1])
+        mem_used = (mem.get("MemTotal", 0) - mem.get("MemAvailable", 0)) // 1024
+        mem_total = mem.get("MemTotal", 0) // 1024
+    except Exception:
+        mem_used = mem_total = 0
+
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+            temp = int(f.read().strip()) / 1000
+    except Exception:
+        temp = 0
+
+    return [
+        "[ SYSTEM ]",
+        f"Load:  {load}",
+        f"RAM:   {mem_used}/{mem_total}MB",
+        f"Temp:  {temp:.1f}C",
+    ]
+
+
+def _info_lines_network():
+    """Netzwerk-Info Screen."""
+    eth = _get_ip("eth0")
+    wlan = _get_ip("wlan0")
+    return [
+        "[ NETWORK ]",
+        f"eth0:  {eth}",
+        f"wlan0: {wlan}",
+        f"SSID:  CHRONOSURF",
+    ]
+
+
+def _info_lines_clients():
+    """Aktive Clients Screen."""
+    lines = [f"[ SURFERS: {active_count} ]"]
+    for c in active_clients[:3]:
+        lines.append(f" {c['id']} > {c['year']}")
+    while len(lines) < 4:
+        lines.append("")
+    return lines
+
+
+def _info_lines_uptime():
+    """Uptime Screen."""
+    ctrl_up = _format_uptime(time.time() - boot_time)
+    try:
+        with open("/proc/uptime", "r") as f:
+            sys_up = _format_uptime(float(f.read().split()[0]))
+    except Exception:
+        sys_up = "?"
+    return [
+        "[ UPTIME ]",
+        f"System: {sys_up}",
+        f"Ctrl:   {ctrl_up}",
+        f"Boot:   OK",
+    ]
+
+
+def _info_lines_wayback():
+    """Wayback Machine Info Screen."""
+    return [
+        "[ WAYBACK ]",
+        "735+ billion pages",
+        "Range: 1996-2025",
+        "archive.org",
+    ]
+
+
+INFO_RENDERERS = {
+    "system":   _info_lines_system,
+    "network":  _info_lines_network,
+    "clients":  _info_lines_clients,
+    "uptime":   _info_lines_uptime,
+    "wayback":  _info_lines_wayback,
+}
+
+
+def _render_info_screen():
+    """Rendert den aktuellen Info-Screen auf das LCD."""
+    screen_key = INFO_SCREENS[info_screen_idx]
+    lines = INFO_RENDERERS[screen_key]()
+
+    if not HW_AVAILABLE:
+        print(f"\r[LCD INFO] {lines[0]}")
+        for line in lines[1:]:
+            print(f"           {line}")
+        return
+
+    with display_lock:
+        try:
+            for i in range(LCD_ROWS):
+                text = lines[i] if i < len(lines) else ""
+                lcd.cursor_pos = (i, 0)
+                lcd.write_string(text[:LCD_COLS].ljust(LCD_COLS))
+        except Exception as e:
+            print(f"LCD error: {e}")
+
+
 def update_display():
+    # Im Info-Modus: anderen Renderer nutzen
+    if info_mode_active:
+        _render_info_screen()
+        return
+
     if not HW_AVAILABLE:
         epoch = get_epoch_name(current_year)
         print(f"\r[LCD] CHRONOSURF  \x03{active_count}", end="")
@@ -434,7 +633,8 @@ def main():
     global lcd
 
     print("CHRONOSURF - Hardware Controller")
-    print("  Encoder (YEAR): GPIO18/17/27")
+    print("  Encoder 1 (YEAR): GPIO18/17/27")
+    print("  Encoder 2 (INFO): GPIO5/6/13")
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
