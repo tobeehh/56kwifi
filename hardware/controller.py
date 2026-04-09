@@ -610,6 +610,7 @@ def poll_state_changes():
     global active_count, active_clients, current_year
     last_mtime = 0
     prev_active_macs = set()
+    first_run = True  # Kein Sound beim ersten Einlesen
 
     while True:
         try:
@@ -635,6 +636,14 @@ def poll_state_changes():
 
                     new_connections = now_active_macs - old_active_macs
                     lost_connections = old_active_macs - now_active_macs
+
+                    # Beim ersten Einlesen: nur State uebernehmen, keine Events
+                    if first_run:
+                        prev_active_macs = now_active_macs
+                        first_run = False
+                        update_display()
+                        time.sleep(1)
+                        continue
 
                     for mac in new_connections:
                         year = mac_year_map.get(mac, current_year)
