@@ -442,6 +442,56 @@ def api_track():
     return jsonify({"ok": True})
 
 
+@app.route("/api/closest")
+def api_closest():
+    """Findet den naechsten Wayback-Snapshot fuer URL + Jahr.
+
+    Query params:
+      url:  die Ziel-URL (ohne Protokoll, z.B. "yahoo.com")
+      year: das Zieljahr
+
+    Returns:
+      { "url": "https://web.archive.org/web/...", "year": 1999 }
+      oder { "url": null }
+    """
+    import urllib.parse as _up
+    import urllib.request as _ur
+
+    url = request.args.get("url", "").strip()
+    year = request.args.get("year", "1999")
+
+    if not url:
+        return jsonify({"url": None})
+
+    url = url.replace("https://", "").replace("http://", "")
+    target_ts = f"{year}0601000000"
+
+    try:
+        api_url = (
+            "https://archive.org/wayback/available"
+            f"?url={_up.quote(url, safe='')}"
+            f"&timestamp={target_ts}"
+        )
+        req = _ur.Request(api_url, headers={"User-Agent": "CHRONOSURF/1.0"})
+        with _ur.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        closest = data.get("archived_snapshots", {}).get("closest")
+        if closest and closest.get("available"):
+            result_url = closest.get("url")
+            ts = closest.get("timestamp", "")
+            result_year = ts[:4] if ts else year
+            return jsonify({"url": result_url, "year": int(result_year)})
+    except Exception:
+        pass
+
+    # Fallback
+    return jsonify({
+        "url": f"https://web.archive.org/web/{year}/http://{url}",
+        "year": int(year),
+    })
+
+
 @app.route("/api/year_for_ip/<ip>")
 def api_year_for_ip(ip):
     """API: Gibt das Jahr fuer eine bestimmte IP zurueck (fuer den Proxy)."""

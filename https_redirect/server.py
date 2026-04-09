@@ -22,6 +22,9 @@ import ssl
 import subprocess
 import sys
 import threading
+import time
+import urllib.parse
+import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -37,6 +40,63 @@ BYPASS_DOMAINS = {
     "chronosurf.local",
     "192.168.4.1",
 }
+
+
+# Cache: {(url, target_ts): (result_url_or_None, cache_time)}
+_availability_cache = {}
+_cache_lock = threading.Lock()
+CACHE_TTL = 3600  # 1h
+
+
+def find_closest_snapshot(url, year):
+    """
+    Fragt die Wayback Availability API nach dem naechstgelegenen Snapshot.
+
+    Returns: Vollstaendige Wayback-URL mit exaktem Timestamp oder None.
+    """
+    target_ts = f"{year}0601000000"  # Mitte des Jahres
+    cache_key = (url, target_ts)
+
+    # Cache-Check
+    with _cache_lock:
+        cached = _availability_cache.get(cache_key)
+        if cached and (time.time() - cached[1]) < CACHE_TTL:
+            return cached[0]
+
+    # API-Aufruf
+    try:
+        api_url = (
+            "https://archive.org/wayback/available"
+            f"?url={urllib.parse.quote(url, safe='')}"
+            f"&timestamp={target_ts}"
+        )
+        req = urllib.request.Request(
+            api_url,
+            headers={"User-Agent": "CHRONOSURF/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        closest = data.get("archived_snapshots", {}).get("closest")
+        if closest and closest.get("available"):
+            result = closest.get("url")
+        else:
+            result = None
+
+    except Exception as e:
+        print(f"Availability API error: {e}", file=sys.stderr)
+        result = None
+
+    # Cachen (auch Failures fuer kurze Zeit)
+    with _cache_lock:
+        _availability_cache[cache_key] = (result, time.time())
+        # Cache begrenzt halten
+        if len(_availability_cache) > 500:
+            oldest = sorted(_availability_cache.items(), key=lambda x: x[1][1])[:100]
+            for k, _ in oldest:
+                del _availability_cache[k]
+
+    return result
 
 
 def _get_mac_for_ip(ip):
@@ -113,8 +173,18 @@ class RedirectHandler(BaseHTTPRequestHandler):
 
         year = get_year_for_ip(client_ip)
 
-        # Wayback URL bauen
-        wayback_url = f"https://web.archive.org/web/{year}/http://{host}{self.path}"
+        # Erst Availability API fragen - findet den naechsten Snapshot
+        # auch ueber Jahresgrenzen hinweg
+        original_url = f"http://{host}{self.path}"
+        closest = find_closest_snapshot(original_url, year)
+
+        if closest:
+            wayback_url = closest
+            closest_year = closest.split("/web/")[-1][:4] if "/web/" in closest else str(year)
+        else:
+            # Fallback: direkte Wayback-URL mit Jahr
+            wayback_url = f"https://web.archive.org/web/{year}/http://{host}{self.path}"
+            closest_year = str(year)
 
         # HTML-Seite die automatisch weiterleitet
         # (besser als 302 damit die Zertifikatswarnung nur einmal kommt)
@@ -136,7 +206,8 @@ a {{ color: #00e5ff; }}
 <div>
 <h1>WARPING THROUGH TIME</h1>
 <p>{host}</p>
-<div class="year">{year}</div>
+<div class="year">{closest_year}</div>
+{"<p style='color:#00e5ff;font-size:0.8rem'>closest snapshot to " + str(year) + "</p>" if closest_year != str(year) else ""}
 <p>If you are not redirected automatically,<br><a href="{wayback_url}">click here</a></p>
 </div>
 <script>window.location.href = {wayback_url!r};</script>

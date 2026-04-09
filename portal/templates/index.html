@@ -160,7 +160,7 @@
                 </div>
                 <div class="sites-grid" id="sites-grid">
                     {% for site in favorites %}
-                    <a href="https://web.archive.org/web/{{ year }}/http://{{ site.url }}" class="site-card" target="_blank">
+                    <a href="#" class="site-card" data-url="{{ site.url }}" onclick="openFavorite(event, this)">
                         <div class="site-name">{{ site.name }}</div>
                         <div class="site-desc">{{ site.desc }}</div>
                         <div class="site-url">&gt; {{ site.url }}</div>
@@ -263,7 +263,7 @@
             if (!data) return;
             sitesTitle.textContent = 'DESTINATIONS: ' + data.label;
             sitesGrid.innerHTML = data.sites.map(s => `
-                <a href="https://web.archive.org/web/${yearInput.value}/http://${s.url}" class="site-card" target="_blank">
+                <a href="#" class="site-card" data-url="${s.url}" onclick="openFavorite(event, this)">
                     <div class="site-name">${s.name}</div>
                     <div class="site-desc">${s.desc}</div>
                     <div class="site-url">&gt; ${s.url}</div>
@@ -271,13 +271,50 @@
             `).join('');
         }
 
+        function openFavorite(e, el) {
+            e.preventDefault();
+            const url = el.dataset.url;
+            const year = yearInput.value;
+            const win = window.open('about:blank', '_blank');
+
+            fetch('/api/closest?url=' + encodeURIComponent(url) + '&year=' + year)
+                .then(r => r.json())
+                .then(data => {
+                    const target = data.url ||
+                        ('https://web.archive.org/web/' + year + '/http://' + url);
+                    if (win) win.location.href = target;
+                })
+                .catch(() => {
+                    if (win) win.location.href =
+                        'https://web.archive.org/web/' + year + '/http://' + url;
+                });
+        }
+
         function goToUrl() {
             let url = $('search-input').value.trim();
             if (!url) return;
-            // Protokoll entfernen falls eingegeben
             url = url.replace(/^https?:\/\//, '');
             const year = yearInput.value;
-            window.open('https://web.archive.org/web/' + year + '/http://' + url, '_blank');
+            const btn = document.querySelector('.search-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '...';
+            btn.disabled = true;
+
+            // Availability API fragen (findet auch ueber Jahresgrenzen hinweg)
+            fetch('/api/closest?url=' + encodeURIComponent(url) + '&year=' + year)
+                .then(r => r.json())
+                .then(data => {
+                    const target = data.url ||
+                        ('https://web.archive.org/web/' + year + '/http://' + url);
+                    window.open(target, '_blank');
+                })
+                .catch(() => {
+                    window.open('https://web.archive.org/web/' + year + '/http://' + url, '_blank');
+                })
+                .finally(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                });
         }
 
         // Enter-Taste in der Suchleiste
