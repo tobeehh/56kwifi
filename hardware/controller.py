@@ -167,6 +167,8 @@ def poll_encoders():
 
     last_year_btn = 1
     last_info_btn = 1
+    year_btn_down_time = None
+    shutdown_triggered = False
 
     while True:
         # --- Year Encoder ---
@@ -184,15 +186,46 @@ def poll_encoders():
                 info_mode_active = False
                 update_display()
 
-        # --- Year Button: DIAL IN mit Modem-Sound ---
+        # --- Year Button: Kurz=DIAL IN, Lang (5s)=SHUTDOWN ---
         btn = GPIO.input(PIN_YEAR_BTN)
+
         if btn == 0 and last_year_btn == 1:
-            write_global_state()
-            print(f"DIAL IN: {current_year}")
-            # Modem-Sound + LCD-Animation
-            play_async(play_dialup_sound)
-            show_dialin_animation()
-            update_display()
+            # Button gerade gedrueckt worden - Timer starten
+            year_btn_down_time = time.time()
+            shutdown_triggered = False
+
+        if btn == 0 and year_btn_down_time is not None and not shutdown_triggered:
+            # Button wird gehalten - pruefen ob 5s erreicht
+            held = time.time() - year_btn_down_time
+            if held >= 5.0:
+                shutdown_triggered = True
+                trigger_shutdown()
+            elif held >= 1.0:
+                # Countdown auf dem LCD ab Sekunde 1
+                remaining = int(5 - held) + 1
+                if HW_AVAILABLE and lcd is not None:
+                    with display_lock:
+                        _lcd_write_line(0, "    SHUTDOWN IN")
+                        _lcd_write_line(1, f"        {remaining}")
+                        _lcd_write_line(2, "")
+                        _lcd_write_line(3, " release to cancel")
+
+        if btn == 1 and last_year_btn == 0:
+            # Button losgelassen
+            if year_btn_down_time is not None and not shutdown_triggered:
+                held = time.time() - year_btn_down_time
+                if held < 1.0:
+                    # Kurzer Druck -> DIAL IN
+                    write_global_state()
+                    print(f"DIAL IN: {current_year}")
+                    play_async(play_dialup_sound)
+                    show_dialin_animation()
+                    update_display()
+                else:
+                    # Langer Druck abgebrochen -> Display zurueck
+                    update_display()
+            year_btn_down_time = None
+
         last_year_btn = btn
 
         # --- Info Encoder ---
@@ -539,6 +572,40 @@ def show_boot_screen():
 
 
 # --- Surfer Events ---
+
+def trigger_shutdown():
+    """Faehrt das System sauber herunter."""
+    import subprocess
+
+    print("SHUTDOWN TRIGGERED")
+
+    if HW_AVAILABLE and lcd is not None:
+        with display_lock:
+            lcd.clear()
+            _lcd_write_line(0, "    CHRONOSURF")
+            _lcd_write_line(1, "")
+            _lcd_write_line(2, "  shutting down...")
+            _lcd_write_line(3, "")
+        time.sleep(1)
+        with display_lock:
+            _lcd_write_line(0, "    CHRONOSURF")
+            _lcd_write_line(1, "")
+            _lcd_write_line(2, "     goodbye!")
+            _lcd_write_line(3, "")
+        time.sleep(1)
+        with display_lock:
+            lcd.clear()
+            lcd.backlight_enabled = False
+
+    # Disconnect-Sound (kurzes Hang-up)
+    try:
+        play_disconnect_sound()
+    except Exception:
+        pass
+
+    # System runterfahren
+    subprocess.run(["systemctl", "poweroff"], check=False)
+
 
 def show_dialin_animation():
     """Dial-In Animation wenn am Hardware-Encoder ein Jahr bestaetigt wird.
