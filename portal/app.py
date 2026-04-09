@@ -22,6 +22,121 @@ app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400
 
 
+PORTAL_HOSTS = {"chronosurf.local", "192.168.4.1", "chronosurf", ""}
+
+
+@app.before_request
+def check_host():
+    """Wenn Host-Header nicht das Portal ist -> Wayback Redirect.
+    Die Portal-IP wird von DNS-gehijackten Anfragen getroffen, aber
+    wir wollen dann zur Wayback Machine umleiten, nicht das Portal zeigen.
+    """
+    host = request.host.split(":")[0].lower()
+    if host in PORTAL_HOSTS:
+        return None
+    if host.startswith("192.168.4."):
+        return None
+
+    # Captive Portal Detection Endpoints bleiben
+    if request.path in (
+        "/generate_204", "/gen_204",
+        "/hotspot-detect.html", "/library/test/success.html",
+        "/connecttest.txt", "/ncsi.txt",
+        "/canonical.html", "/success.txt",
+    ):
+        return None
+
+    # Fremder Host -> Wayback Redirect (via HTTPS server Logik)
+    client_id = _get_client_id()
+    state = get_client_state(client_id)
+    year = state["year"]
+
+    original_url = f"http://{host}{request.full_path.rstrip('?')}"
+    # Availability API
+    closest = _find_wayback_closest(original_url, year)
+
+    if closest:
+        target = closest
+        closest_year = closest.split("/web/")[-1][:4] if "/web/" in closest else str(year)
+    else:
+        # Nichts gefunden -> Not Archived Seite
+        return render_template(
+            "captive.html"
+        ), 200
+
+    body = f"""<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="0;url={target}">
+<title>CHRONOSURF - Time Warp</title>
+<style>
+body{{background:#06080a;color:#00ff41;font-family:monospace;
+display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}}
+h1{{font-size:2rem;text-shadow:0 0 20px #00ff41}}
+.year{{color:#00ff41;font-weight:700;font-size:3rem}}
+a{{color:#00e5ff}}
+</style></head>
+<body><div>
+<h1>WARPING THROUGH TIME</h1>
+<p>{host}</p>
+<div class="year">{closest_year}</div>
+<p><a href="{target}">continue</a></p>
+</div>
+<script>window.location.href={target!r};</script>
+</body></html>"""
+    return body, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+def _find_wayback_closest(url, year):
+    """Helper: Availability API mit Varianten."""
+    import urllib.parse as _up
+    import urllib.request as _ur
+
+    stripped = url.replace("http://", "").replace("https://", "")
+    if "/" in stripped:
+        host, path = stripped.split("/", 1)
+        path = "/" + path
+    else:
+        host, path = stripped, ""
+    bare_host = host[4:] if host.startswith("www.") else host
+    www_host = "www." + bare_host
+    target_ts = f"{year}0601000000"
+
+    variants = []
+    for v in [
+        f"http://{host}{path}",
+        f"http://{host}{path}/",
+        f"http://{www_host}{path}",
+        f"http://{www_host}{path}/",
+        f"http://{bare_host}{path}",
+        f"http://{bare_host}{path}/",
+        host + path, bare_host, www_host,
+    ]:
+        if v not in variants:
+            variants.append(v)
+
+    for v in variants:
+        try:
+            api_url = (
+                "https://archive.org/wayback/available"
+                f"?url={_up.quote(v, safe='')}"
+                f"&timestamp={target_ts}"
+            )
+            req = _ur.Request(api_url, headers={"User-Agent": "CHRONOSURF/1.0"})
+            with _ur.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            c = data.get("archived_snapshots", {}).get("closest")
+            if c and c.get("available"):
+                r = c.get("url", "")
+                if r.startswith("http://web.archive.org/"):
+                    r = "https://" + r[len("http://"):]
+                r = r.replace(":80/", "/")
+                return r
+        except Exception:
+            continue
+    return None
+
+
 @app.after_request
 def add_cache_headers(resp):
     """Cache-Header fuer statische Dateien."""
