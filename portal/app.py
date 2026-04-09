@@ -46,23 +46,15 @@ def check_host():
     ):
         return None
 
-    # Fremder Host -> Wayback Redirect (via HTTPS server Logik)
+    # Fremder Host -> Wayback Redirect ohne API-Lookup (zu langsam fuer Request-Zyklus)
+    # Wayback macht selbst "closest match" wenn man nur /web/YYYY/ angibt
     client_id = _get_client_id()
     state = get_client_state(client_id)
     year = state["year"]
 
-    original_url = f"http://{host}{request.full_path.rstrip('?')}"
-    # Availability API
-    closest = _find_wayback_closest(original_url, year)
-
-    if closest:
-        target = closest
-        closest_year = closest.split("/web/")[-1][:4] if "/web/" in closest else str(year)
-    else:
-        # Nichts gefunden -> Not Archived Seite
-        return render_template(
-            "captive.html"
-        ), 200
+    target = f"https://web.archive.org/web/{year}/http://{host}{request.path}"
+    if request.query_string:
+        target += "?" + request.query_string.decode("utf-8", errors="replace")
 
     body = f"""<!DOCTYPE html>
 <html><head>
@@ -79,7 +71,7 @@ a{{color:#00e5ff}}
 <body><div>
 <h1>WARPING THROUGH TIME</h1>
 <p>{host}</p>
-<div class="year">{closest_year}</div>
+<div class="year">{year}</div>
 <p><a href="{target}">continue</a></p>
 </div>
 <script>window.location.href={target!r};</script>
