@@ -508,6 +508,8 @@ def api_closest():
                 # landet und in iptables-Redirect faellt
                 if result_url.startswith("http://web.archive.org/"):
                     result_url = "https://" + result_url[len("http://"):]
+                # :80 aus der archivierten URL entfernen
+                result_url = result_url.replace(":80/", "/")
                 return result_url, c.get("timestamp", "")[:4]
         except Exception:
             pass

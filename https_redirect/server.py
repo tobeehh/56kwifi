@@ -69,6 +69,8 @@ def _query_availability(url, target_ts):
             # sonst geht der Browser auf Port 80 und landet im iptables redirect
             if result.startswith("http://web.archive.org/"):
                 result = "https://" + result[len("http://"):]
+            # :80 aus der archivierten URL entfernen (browser-inkompatibel)
+            result = result.replace(":80/", "/")
             return result
     except Exception as e:
         print(f"Availability API error for {url}: {e}", file=sys.stderr)
