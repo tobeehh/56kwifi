@@ -18,6 +18,20 @@ from flask import (
 
 app = Flask(__name__)
 
+# Static Files: 1 Tag Cache-Header
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400
+
+
+@app.after_request
+def add_cache_headers(resp):
+    """Cache-Header fuer statische Dateien."""
+    if request.path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+    else:
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 # Zustandsdatei fuer alle Clients
 STATE_FILE = Path("/tmp/chronosurf_state.json")
 STATS_FILE = Path("/tmp/chronosurf_stats.json")

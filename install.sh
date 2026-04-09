@@ -38,9 +38,9 @@ else
 fi
 
 # ============================================
-# [1/7] System-Pakete
+# [1/8] System-Pakete
 # ============================================
-echo "  [1/7] Installing system packages..."
+echo "  [1/8] Installing system packages..."
 apt-get update -qq
 
 # Core packages (work on both DietPi and Raspberry Pi OS)
@@ -68,9 +68,9 @@ fi
 apt-get install -y -qq python3-venv 2>/dev/null || true
 
 # ============================================
-# [2/7] I2C aktivieren
+# [2/8] I2C aktivieren
 # ============================================
-echo "  [2/7] Enabling I2C..."
+echo "  [2/8] Enabling I2C..."
 
 # Find the right config.txt path
 BOOT_CONFIG=""
@@ -102,9 +102,9 @@ fi
 modprobe i2c-dev 2>/dev/null || true
 
 # ============================================
-# [3/7] WiFi-Firmware sicherstellen
+# [3/8] WiFi-Firmware sicherstellen
 # ============================================
-echo "  [3/7] Ensuring WiFi firmware..."
+echo "  [3/8] Ensuring WiFi firmware..."
 
 # DietPi might not have WiFi firmware installed by default
 if [ "$IS_DIETPI" = true ]; then
@@ -117,16 +117,16 @@ fi
 rfkill unblock wifi 2>/dev/null || true
 
 # ============================================
-# [4/7] Dateien kopieren
+# [4/8] Dateien kopieren
 # ============================================
-echo "  [4/7] Deploying to ${INSTALL_DIR}..."
+echo "  [4/8] Deploying to ${INSTALL_DIR}..."
 mkdir -p "${INSTALL_DIR}"
 cp -r portal proxy hardware requirements.txt "${INSTALL_DIR}/"
 
 # ============================================
-# [5/7] Python-Abhaengigkeiten
+# [5/8] Python-Abhaengigkeiten
 # ============================================
-echo "  [5/7] Installing Python dependencies..."
+echo "  [5/8] Installing Python dependencies..."
 
 # Try with --break-system-packages first (needed on Bookworm+)
 # Fall back to without flag (Bullseye), then to venv as last resort
@@ -146,15 +146,15 @@ else
 fi
 
 # ============================================
-# [6/7] Netzwerk konfigurieren
+# [6/8] Netzwerk konfigurieren
 # ============================================
-echo "  [6/7] Configuring network..."
+echo "  [6/8] Configuring network..."
 bash "${SCRIPT_DIR}/scripts/setup_network.sh"
 
 # ============================================
-# [7/7] Systemd-Services installieren
+# [7/8] Systemd-Services installieren
 # ============================================
-echo "  [7/7] Installing services..."
+echo "  [7/8] Installing services..."
 cp "${SCRIPT_DIR}/systemd/chronosurf-portal.service" /etc/systemd/system/
 cp "${SCRIPT_DIR}/systemd/chronosurf-proxy.service" /etc/systemd/system/
 cp "${SCRIPT_DIR}/systemd/chronosurf-hardware.service" /etc/systemd/system/
@@ -163,6 +163,12 @@ systemctl daemon-reload
 systemctl enable chronosurf-portal.service
 systemctl enable chronosurf-proxy.service
 systemctl enable chronosurf-hardware.service
+
+# ============================================
+# [8/8] Performance Optimierungen
+# ============================================
+echo "  [8/8] Applying performance optimizations..."
+bash "${SCRIPT_DIR}/scripts/optimize.sh" 2>&1 | sed 's/^/    /' || true
 
 echo ""
 echo "  ================================================"
